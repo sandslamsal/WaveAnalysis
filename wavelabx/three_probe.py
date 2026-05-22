@@ -137,10 +137,22 @@ def three_probe_array(
                 cond_pair[ii, jj] = np.inf
 
     if np.any(cond_pair > cond_warn):
-        worst = np.nanmax(cond_pair)
+        # Identify exactly which probe pairs are ill-conditioned, and at how
+        # many frequencies, rather than reporting a single aggregate warning.
+        pair_labels = ["(1-2)", "(1-3)", "(2-3)"]
+        per_pair_max = np.nanmax(cond_pair, axis=0)
+        per_pair_count = np.sum(cond_pair > cond_warn, axis=0)
+        bad = [
+            (pair_labels[jj], int(per_pair_count[jj]), float(per_pair_max[jj]))
+            for jj in range(cond_pair.shape[1])
+            if per_pair_count[jj] > 0
+        ]
+        details = "; ".join(
+            f"pair {lab}: {n} freq, max cond {c:.2e}" for lab, n, c in bad
+        )
         print(
-            f"[WaveLabX] Warning: three-probe pair inversions are ill-conditioned at some "
-            f"frequencies (max cond ≈ {worst:.2e})."
+            "[WaveLabX] Warning: three-probe pair inversions are ill-conditioned "
+            f"at some frequencies. {details}."
         )
 
     bad_cond_pair = cond_pair > cond_max

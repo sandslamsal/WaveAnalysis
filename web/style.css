@@ -146,11 +146,6 @@ input[type="number"]:focus {
   flex: 1;
 }
 .pos-row input { width: 100%; }
-.spacing-readout {
-  margin-top: 6px;
-  font-size: 0.73rem;
-  color: var(--accent-dark);
-}
 
 /* ---------- dropzone ---------- */
 .dropzone {

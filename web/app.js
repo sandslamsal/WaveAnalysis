@@ -285,12 +285,35 @@ function analyzeRecord(rec, redetect) {
     const period = (a1 && a1.Tp != null && Number.isFinite(a1.Tp)) ? a1.Tp
       : (rec.freq > 0 ? 1 / rec.freq : NaN);
 
-    // Goda spacing diagnostic for the current dominant frequency
+    // Goda spacing diagnostic for the current dominant frequency.
+    // We check every probe pair against 0.05 <= dx/L <= 0.45 and collect
+    // the failing pairs as { label, ratio, reason }. The base label for
+    // each gauge is the channel number in the original CSV (1..6).
     const L = (rec.freq > 0) ? wavelength(rec.freq, rec.depth) : NaN;
-    const span = (p) => (Math.max(...p) - Math.min(...p));
-    const dl1 = Number.isFinite(L) && L > 0 ? span(s.pos1) / L : NaN;
-    const dl2 = (rec.layout === "dual6" && Number.isFinite(L) && L > 0)
-      ? span(s.pos2) / L : NaN;
+    const pairsOf = (pos, labels) => {
+      const out = [];
+      for (let i = 0; i < pos.length; i++)
+        for (let j = i + 1; j < pos.length; j++)
+          out.push({ i, j, dx: Math.abs(pos[j] - pos[i]),
+                     label: `(${labels[i]}-${labels[j]})` });
+      return out;
+    };
+    const goda = (pairs) => {
+      const fails = [];
+      if (!(Number.isFinite(L) && L > 0)) return fails;
+      for (const p of pairs) {
+        const r = p.dx / L;
+        if (r < DL_MIN) fails.push({ label: p.label, ratio: r, reason: "low" });
+        else if (r > DL_MAX) fails.push({ label: p.label, ratio: r, reason: "high" });
+      }
+      return fails;
+    };
+    // Per-array labels follow the channel numbering in the CSV.
+    const labels1 = rec.layout === "single2" ? [1, 2] : [1, 2, 3];
+    const labels2 = [4, 5, 6];
+    const pos1 = rec.layout === "single2" ? s.pos1.slice(0, 2) : s.pos1;
+    const outOfBand1 = goda(pairsOf(pos1, labels1));
+    const outOfBand2 = a2 ? goda(pairsOf(s.pos2, labels2)) : [];
 
     // Whether a two-probe fallback was selected for either array.
     const fallback1 = a1 && a1.method_used === "two_probe";
@@ -308,10 +331,8 @@ function analyzeRecord(rec, redetect) {
       method1: a1 ? a1.method_used : null,
       method2: a2 ? a2.method_used : null,
       fallback: fallback1 || fallback2,
-      L, dl1, dl2,
-      ratioWarn:
-        (Number.isFinite(dl1) && (dl1 < DL_MIN || dl1 > DL_MAX)) ||
-        (Number.isFinite(dl2) && (dl2 < DL_MIN || dl2 > DL_MAX)),
+      L, outOfBand1, outOfBand2,
+      ratioWarn: outOfBand1.length > 0 || outOfBand2.length > 0,
       retained: ret, retainedWarn: Number.isFinite(ret) && !(ret >= 0.8),
       spectral: true,
     };
@@ -335,13 +356,12 @@ const fmt = (x, p = 4) =>
 function renderTable() {
   const body = $("resultsBody");
   body.innerHTML = "";
-  let anyFallback = false, anyRatio = false, anyRetained = false;
+  let anyFallback = false, anyRetained = false;
 
   state.records.forEach((rec) => {
     const tr = document.createElement("tr");
     const r = rec.result;
     if (r && r.fallback) anyFallback = true;
-    if (r && r.ratioWarn) anyRatio = true;
     if (r && r.retainedWarn) anyRetained = true;
 
     const depthCell = `<td class="editable">
@@ -403,12 +423,32 @@ function renderTable() {
   if (anyFallback)
     msgs.push("&#9888; A two-gauge fallback was used where the three-gauge " +
       "system was ill-conditioned (spacing near a multiple of L/2).");
-  if (anyRatio)
-    msgs.push("&#9888; Some rows have gauge spacing outside the valid range " +
-      "0.05 &le; &Delta;l/L &le; 0.45 — interpret those with caution.");
+
+  // Build a per-row, per-pair Goda-spacing report listing exactly which
+  // probe pair fell outside 0.05 <= dx/L <= 0.45.
+  const ratioRows = [];
+  state.records.forEach((rec) => {
+    const r = rec.result;
+    if (!r) return;
+    const fails = [
+      ...(r.outOfBand1 || []).map((f) => ({ ...f, arr: r.layout === "dual6" ? " (Array 1)" : "" })),
+      ...(r.outOfBand2 || []).map((f) => ({ ...f, arr: " (Array 2)" })),
+    ];
+    if (!fails.length) return;
+    const parts = fails.map((f) => {
+      const side = f.reason === "low" ? "&lt; 0.05" : "&gt; 0.45";
+      return `pair ${f.label}${f.arr} &Delta;x/L = ${f.ratio.toFixed(3)} (${side})`;
+    });
+    ratioRows.push(`<i>${rec.name}</i>: ${parts.join("; ")}`);
+  });
+  if (ratioRows.length)
+    msgs.push("&#9888; Gauge spacing outside 0.05 &le; &Delta;x/L &le; 0.45 at the "
+      + "dominant frequency:<br>&nbsp;&nbsp;&nbsp;"
+      + ratioRows.join("<br>&nbsp;&nbsp;&nbsp;"));
+
   if (anyRetained)
     msgs.push("&#9888; Some rows retained less than 80% of spectral energy " +
-      "within the valid frequency band — interpret those with caution.");
+      "within the valid frequency band; interpret those with caution.");
   if (msgs.length) { warn.hidden = false; warn.innerHTML = msgs.join("<br>"); }
   else warn.hidden = true;
 
@@ -1131,15 +1171,6 @@ function vizZoom(factor) {
   drawViz();
 }
 
-function updateSpacingReadout() {
-  const s = getSettings();
-  const sp = (p, g) =>
-    `Gauge positions from gauge&nbsp;${g}: ` +
-    `${p[0].toFixed(2)}, ${p[1].toFixed(2)}, ${p[2].toFixed(2)} m`;
-  $("spacing1").innerHTML = sp(s.pos1, 1);
-  $("spacing2").innerHTML = sp(s.pos2, 4);
-}
-
 /* ---------------------------------------------------------------------------
  * File ingestion
  * ------------------------------------------------------------------------- */
@@ -1185,29 +1216,72 @@ function readFiles(fileList) {
  * Export
  * ------------------------------------------------------------------------- */
 function exportCSV() {
+  // Pretty, human-readable column titles with units in parentheses.
+  // Quoting every header keeps Excel-style parsers happy with the spaces.
   const head = [
-    "File", "Depth_d_m", "Freq_f_Hz", "Period_T_s",
-    "Hi1_m", "Hr1_m", "Kr1", "Method1",
-    "Hi2_m", "Hr2_m", "Kr2", "Method2",
-    "Kt_Hi2overHi1", "Wavelength_L_m", "Fallback2probe", "SpacingRatioWarn",
-  ];
+    "File",
+    "Water depth (m)",
+    "Frequency f (Hz)",
+    "Period T (s)",
+    "Hi - Array 1 (m)",
+    "Hr - Array 1 (m)",
+    "Kr - Array 1",
+    "Method - Array 1",
+    "Hi - Array 2 (m)",
+    "Hr - Array 2 (m)",
+    "Kr - Array 2",
+    "Method - Array 2",
+    "Kt (transmission)",
+    "Wavelength L (m)",
+    "Two-probe fallback used",
+    "Out-of-band pairs",
+  ].map((h) => `"${h}"`);
+
   const rows = [head.join(",")];
+  // Render method names as readable English (no HTML, no internal token).
+  const prettyMethod = (m) =>
+    m === "three_probe" ? "Three-probe"
+    : m === "two_probe" ? "Two-probe"
+    : "";
+  // Render out-of-band pairs as a single readable cell.
+  const prettyOOB = (r) => {
+    const all = [
+      ...(r.outOfBand1 || []).map((f) =>
+        ({ ...f, arr: r.layout === "dual6" ? " Array 1" : "" })),
+      ...(r.outOfBand2 || []).map((f) => ({ ...f, arr: " Array 2" })),
+    ];
+    if (!all.length) return "";
+    return all.map((f) => {
+      const side = f.reason === "low" ? "<0.05" : ">0.45";
+      return `pair ${f.label}${f.arr} dx/L=${f.ratio.toFixed(3)} (${side})`;
+    }).join("; ");
+  };
+
   state.records.forEach((rec) => {
     const r = rec.result;
     if (!r) {
-      rows.push([`"${rec.name}"`, rec.depth ?? "", rec.freq ?? "",
-        "", "", "", "", "", "", "", "", "", "", "", "", rec.error || "error"].join(","));
+      rows.push([
+        `"${rec.name}"`, rec.depth ?? "", rec.freq ?? "",
+        "", "", "", "", "", "", "", "", "", "", "", "",
+        `"${(rec.error || "error").replace(/"/g, "'")}"`,
+      ].join(","));
       return;
     }
-    const g = (x, p) => (x == null || Number.isNaN(x) ? "" : x.toFixed(p));
+    const g = (x, p) => (x == null || Number.isNaN(x) ? "" : Number(x).toFixed(p));
+    const oob = prettyOOB(r);
     rows.push([
-      `"${rec.name}"`, g(rec.depth, 4), g(rec.freq, 5), g(r.period, 4),
-      g(r.Hi1, 6), g(r.Hr1, 6), g(r.Kr1, 4), r.method1 || "",
-      g(r.Hi2, 6), g(r.Hr2, 6), g(r.Kr2, 4), r.method2 || "",
+      `"${rec.name}"`,
+      g(rec.depth, 4), g(rec.freq, 5), g(r.period, 4),
+      g(r.Hi1, 6), g(r.Hr1, 6), g(r.Kr1, 4),
+      `"${prettyMethod(r.method1)}"`,
+      g(r.Hi2, 6), g(r.Hr2, 6), g(r.Kr2, 4),
+      `"${prettyMethod(r.method2)}"`,
       g(r.Kt, 4), g(r.L, 4),
-      r.fallback ? "yes" : "no", r.ratioWarn ? "yes" : "no",
+      r.fallback ? "yes" : "no",
+      oob ? `"${oob}"` : "",
     ].join(","));
   });
+
   const blob = new Blob([rows.join("\n")], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1255,7 +1329,6 @@ function init() {
   // gauge layout / sampling changes -> recompute (no re-detect needed)
   document.querySelectorAll("#fs, #skipWaves, #numWaves, .sp1, .sp2").forEach((el) =>
     el.addEventListener("change", () => {
-      updateSpacingReadout();
       if (state.records.length) analyzeAll(false);
     })
   );
@@ -1329,7 +1402,6 @@ function init() {
   });
 
   applyVizType();
-  updateSpacingReadout();
 }
 
 /* Show the probe checkboxes for the time-series plot, or the
