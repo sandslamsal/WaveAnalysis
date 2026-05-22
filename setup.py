@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="wavelabx",
-    version="0.3.0",
+    version="0.3.1",
     description="WaveLabX: A Python toolkit for wave-probe analysis",
     packages=find_packages(exclude=("tests",)),
     install_requires=[

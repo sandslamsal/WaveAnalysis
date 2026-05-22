@@ -4,6 +4,72 @@ All notable changes to WaveLabX are recorded here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-05-22
+
+### Added
+- High-level `reflectionAnalysis()` in `web/spectral.js`, mirroring
+  Python's `wavelabx.analysis.reflection_analysis`. Both modes of the
+  browser application now use this unified routine, and a JS<->Python
+  parity test cross-checks it against the Python reference.
+- Automatic detection of the CSV column count in the browser application
+  (2 / 3 / 6); the corresponding routine is selected automatically. A
+  per-record layout tag ("2-probe" or "3-probe") is shown next to the
+  file name when single-array data is detected.
+- "Analysis method" override dropdown in the Settings panel: Auto,
+  Three-probe only, Two-probe (best pair), Two-probe (gauges 1-2 / 1-3 /
+  2-3). Lets users force a specific method, intended for paper
+  validation.
+- Per-array method-used badge in the results table ("3P" or "2P"), with
+  matching color-coded styling. Also written to the exported CSV.
+- Per-pair Goda spacing diagnostic: the browser's warning panel and the
+  Python `three_probe_array` warning both identify the specific probe
+  pair(s) outside the band 0.05 <= dx/L <= 0.45 (including the Δx/L
+  value and whether each pair was below 0.05 or above 0.45), instead of
+  a single aggregate "some rows" warning.
+- "Validation cookbook" section in `README.md` with copy-pasteable
+  Python and browser snippets for the four most common cases: 2-probe
+  data, 3-probe data, 6-channel dual-array data, and forced-pair
+  two-probe cross-checks.
+
+### Changed
+- The Regular / Irregular wave-type toggle in the browser application
+  has been removed. The same spectral routine runs for every uploaded
+  file; the previous Regular-mode affordances (auto-detected dominant
+  frequency, editable f cell, optional skip-N-waves window) are now
+  always available.
+- CSV export rewritten with human-readable column titles ("Water depth
+  (m)", "Hi - Array 1 (m)", "Method - Array 1", ...). Method values are
+  exported as "Three-probe" / "Two-probe" (no HTML/badge token). A new
+  "Out-of-band pairs" column carries the same per-pair Goda diagnostic
+  shown on screen.
+- `scripts/multi_example_test.py` and `scripts/real_data_example.py` now
+  use the natural CSV channel order for the shoreward array
+  (`cols=[3,4,5]`), matching the browser-application convention.
+- In-page introduction in `web/index.html` and `web/README.md`
+  rewritten to describe the unified spectral routine, the column-count
+  auto-detect and the Analysis-method dropdown; the previous
+  Hann-windowed single-frequency description is removed.
+- Removed the redundant per-array X12/X23 description hints and the
+  "Gauge positions from gauge N: ..." readout below each array's
+  spacing inputs.
+
+### Removed
+- `paper.md` (JOSS source) and the figures it referenced
+  (`figures/probessetup.png`, `figures/incident_reflected_timeseries.png`).
+  `paper.bib` is no longer tracked in the repository.
+- In-page single-frequency `threeProbe()` routine in `web/app.js` and
+  its dead helpers (`gaugeAmplitudes`, `condHermitian2`, `cConj`,
+  `COND_LIMIT`); both modes now route through
+  `WaveLabXSpectral.reflectionAnalysis`.
+
+### Fixed
+- Mode-note text under the (now-removed) Regular toggle previously
+  claimed "single-frequency method", which became inaccurate after the
+  Regular/Irregular paths were unified.
+- Channel-order convention mismatch between the Python scripts and the
+  browser application that produced Hi/Hr labels swapped on the
+  shoreward array.
+
 ## [0.3.0] - 2026-05-22
 
 ### Removed

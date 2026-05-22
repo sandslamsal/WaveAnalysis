@@ -21,7 +21,7 @@ repository-code: https://github.com/sandslamsal/WaveLabX
 url: https://wave-lab-x.vercel.app
 doi: 10.5281/zenodo.20217994
 license: MIT
-version: 0.3.0
+version: 0.3.1
 date-released: 2026-05-22
 keywords:
   - wave reflection

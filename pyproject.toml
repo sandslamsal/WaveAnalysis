@@ -1,6 +1,6 @@
 [project]
 name = "wavelabx"
-version = "0.3.0"
+version = "0.3.1"
 description = "WaveLabX: A Python and web-based toolkit for wave statistics and incident-reflected decomposition"
 readme = "README.md"
 license = {text = "MIT"}

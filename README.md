@@ -204,7 +204,7 @@ If you use WaveLabX in your research, please cite the archived software
 release:
 
 > Lamsal, S., Deveaux Garrido, C., Haus, B. K., & Rhode-Barbarigos, L.
-> (2026). *WaveLabX* (v0.3.0) [Software]. Zenodo.
+> (2026). *WaveLabX* (v0.3.1) [Software]. Zenodo.
 > [https://doi.org/10.5281/zenodo.20217994](https://doi.org/10.5281/zenodo.20217994)
 
 BibTeX:
@@ -214,7 +214,7 @@ BibTeX:
   author    = {Lamsal, Sandesh and Deveaux Garrido, Claudia and
                Haus, Brian K. and Rhode-Barbarigos, Landolf},
   title     = {WaveLabX},
-  version   = {0.3.0},
+  version   = {0.3.1},
   year      = {2026},
   doi       = {10.5281/zenodo.20217994},
   url       = {https://github.com/sandslamsal/WaveLabX},
