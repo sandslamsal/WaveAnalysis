@@ -15,24 +15,12 @@ from scipy.signal import detrend
 from .core import compute_wavelength
 
 
-def _hann_window(N: int) -> np.ndarray:
-    """Return Hann window of length N."""
-    return np.hanning(N)
-
-
-def _energy_normalize_window(w: np.ndarray) -> np.ndarray:
-    """Normalize window so mean-square equals 1 (preserves variance)."""
-    ms = np.mean(w**2)
-    return w / np.sqrt(ms) if ms > 0 else w
-
-
 def three_probe_array(
     eta123: np.ndarray,
     fs: float,
     h: float,
     gpos: tuple[float, float, float],
     plot: bool = False,
-    window: str | None = None,
     cond_warn: float = 1e3,
     cond_max: float = 1e6,
     min_retained_energy: float = 0.8,
@@ -56,8 +44,6 @@ def three_probe_array(
         Positions [m] of the three gauges along the flume.
     plot : bool, optional
         If True, saves figures (spectra + reconstructed time series) to figures_dir.
-    window : str | None, optional
-        Window to apply. Supported: None, "hann"/"hanning".
     cond_warn : float
         Print a warning if any pair condition number exceeds this.
     cond_max : float
@@ -87,16 +73,6 @@ def three_probe_array(
 
     # Detrend (demean)
     z = detrend(eta123, axis=0, type="constant")
-
-    # Optional windowing (energy-normalized Hann).
-    if isinstance(window, str) and window.strip().lower() in ("none", "off", "false", "0"):
-        window = None
-    if window is not None:
-        if isinstance(window, str) and window.strip().lower() in ("hann", "hanning"):
-            w = _energy_normalize_window(_hann_window(z.shape[0]))
-        else:
-            raise ValueError(f"Unsupported window: {window}")
-        z = z * w[:, None]
 
     N = int(z.shape[0])
     fs = float(fs)

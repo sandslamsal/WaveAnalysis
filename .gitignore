@@ -31,5 +31,16 @@ dist/
 # Logs
 *.log
 
+# LaTeX build artifacts (paper sources are kept outside the repo)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.abs
+*.synctex.gz
+*.toc
+
 # Ignore Python bytecode cache for other versions
 # keep data, figures, notebooks and source files (don't ignore .ipynb or .png)

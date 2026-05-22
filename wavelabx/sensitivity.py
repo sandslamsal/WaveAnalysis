@@ -191,7 +191,6 @@ def spacing_sensitivity(
                 h=h,
                 gpos=(gpos[i], gpos[j]),
                 plot=False,
-                window=None,
             )
             out.update(
                 {
@@ -213,7 +212,6 @@ def spacing_sensitivity(
             h=h,
             gpos=gpos,
             plot=False,
-            window=None,
             min_retained_energy=min_retained_energy,
         )
         th.update(

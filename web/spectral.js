@@ -276,6 +276,116 @@ function threeProbeArray(cols, fs, h, pos) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Two-probe Goda-Suzuki incident-reflected decomposition.
+ * Mirror of wavelabx.two_probe.two_probe_goda in the Python package; uses
+ * the same per-pair spectral formulation as threeProbeArray applied to a
+ * single probe pair, so the two implementations are mutually consistent.
+ *
+ *   col1, col2 : number[]   gauge-1 / gauge-2 time series (same length)
+ *   fs         : sampling frequency [Hz]
+ *   h          : mean water depth [m]
+ *   pos1, pos2 : gauge positions [m] along the flume
+ *
+ * Returns { Hi, Hr, Kr, retained, spectra: { f, Si, Sr } }
+ * ------------------------------------------------------------------------- */
+const GODA_MIN = 0.05;
+const GODA_MAX = 0.45;
+
+function twoProbeGoda(col1, col2, fs, h, pos1, pos2) {
+  if (col1.length !== col2.length)
+    throw new Error("col1 and col2 must have the same length");
+  const N = col1.length;
+  const dt = 1.0 / fs;
+  const df = fs / N;
+  const half = N >> 1;
+  const nf = half - 1;
+  if (nf < 2) throw new Error("record too short for spectral analysis");
+
+  // Sort probes so dx > 0 (matches the Python implementation).
+  let x1 = pos1, x2 = pos2;
+  let c1 = col1, c2 = col2;
+  if (x1 > x2) { [x1, x2] = [x2, x1]; [c1, c2] = [c2, c1]; }
+  const dx = Math.abs(x2 - x1);
+
+  // Detrend and FFT each gauge.
+  function prep(col) {
+    let mean = 0;
+    for (let n = 0; n < N; n++) mean += col[n];
+    mean /= N;
+    const z = new Float64Array(N);
+    for (let n = 0; n < N; n++) z[n] = col[n] - mean;
+    const F = dftReal(z);
+    const An = new Float64Array(nf);
+    const Bn = new Float64Array(nf);
+    const Sn = new Float64Array(nf);
+    for (let i = 0; i < nf; i++) {
+      const re = F.re[i + 1], im = F.im[i + 1];
+      An[i] = (2 * re) / N;
+      Bn[i] = (-2 * im) / N;
+      Sn[i] = (dt * 2 * (re * re + im * im)) / N;
+    }
+    return { An, Bn, Sn };
+  }
+  const P1 = prep(c1);
+  const P2 = prep(c2);
+
+  // Frequency vector and wavenumber per bin.
+  const f = new Float64Array(nf);
+  const k = new Float64Array(nf);
+  for (let i = 0; i < nf; i++) {
+    f[i] = df * (i + 1);
+    const L = spComputeWavelength(h, 1.0 / f[i]);
+    k[i] = L > 0 ? (2 * Math.PI) / L : 0;
+  }
+
+  // Per-frequency incident/reflected Fourier coefficients (identical algebra
+  // to a single pair in three_probe_array).
+  const Ainc = new Float64Array(nf);
+  const Binc = new Float64Array(nf);
+  const Aref = new Float64Array(nf);
+  const Bref = new Float64Array(nf);
+  const Si = new Float64Array(nf);
+  const Sr = new Float64Array(nf);
+  for (let i = 0; i < nf; i++) {
+    const ki = k[i];
+    const s1 = Math.sin(ki * x1), cs1 = Math.cos(ki * x1);
+    const s2 = Math.sin(ki * x2), cs2 = Math.cos(ki * x2);
+    const A1 = P1.An[i], A2 = P2.An[i];
+    const B1 = P1.Bn[i], B2 = P2.Bn[i];
+    const denom = 2.0 * Math.sin(ki * dx + 1e-16);
+    Ainc[i] = (-A2 * s1 + A1 * s2 + B2 * cs1 - B1 * cs2) / denom;
+    Binc[i] = ( A2 * cs1 - A1 * cs2 + B2 * s1 - B1 * s2) / denom;
+    Aref[i] = (-A2 * s1 + A1 * s2 - B2 * cs1 + B1 * cs2) / denom;
+    Bref[i] = ( A2 * cs1 - A1 * cs2 - B2 * s1 + B1 * s2) / denom;
+
+    // Goda spacing band; mask invalid frequencies.
+    const dxOverL = (ki * dx) / (2 * Math.PI);
+    if (!(dxOverL >= GODA_MIN && dxOverL <= GODA_MAX && ki > 0)) {
+      Ainc[i] = Binc[i] = Aref[i] = Bref[i] = NaN;
+    }
+    Si[i] = (Ainc[i] * Ainc[i] + Binc[i] * Binc[i]) / (2 * df);
+    Sr[i] = (Aref[i] * Aref[i] + Bref[i] * Bref[i]) / (2 * df);
+  }
+
+  // Integrated energies and spectral wave heights.
+  let Ei = 0, Er = 0, Etot = 0, Eret = 0;
+  for (let i = 0; i < nf; i++) {
+    if (!Number.isNaN(Si[i])) Ei += Si[i];
+    if (!Number.isNaN(Sr[i])) Er += Sr[i];
+    Etot += P1.Sn[i];
+    if (!Number.isNaN(Si[i])) Eret += P1.Sn[i];
+  }
+  Ei *= df; Er *= df;
+  const Hi = Ei > 0 ? 4 * Math.sqrt(Ei) : 0;
+  const Hr = Er > 0 ? 4 * Math.sqrt(Er) : 0;
+  const Kr = Hi > 0 ? Hr / Hi : NaN;
+  const retained = Etot > 0 ? Eret / Etot : NaN;
+
+  return { Hi, Hr, Kr, retained,
+           spectra: { f: Array.from(f), Si: Array.from(Si), Sr: Array.from(Sr) } };
+}
+
+/* ---------------------------------------------------------------------------
  * Auto-spectrum (power spectral density) of one gauge record.
  * Same one-sided estimator as the per-gauge Sn in three_probe_array.
  *   col : number[]   single gauge time series
@@ -310,8 +420,12 @@ function autoSpectrum(col, fs) {
 
 /* exports for browser + Node */
 if (typeof window !== "undefined") {
-  window.WaveLabXSpectral = { threeProbeArray, autoSpectrum, spComputeWavelength, dftReal };
+  window.WaveLabXSpectral = {
+    twoProbeGoda, threeProbeArray, autoSpectrum, spComputeWavelength, dftReal,
+  };
 }
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { threeProbeArray, autoSpectrum, spComputeWavelength, dftReal, fftPow2 };
+  module.exports = {
+    twoProbeGoda, threeProbeArray, autoSpectrum, spComputeWavelength, dftReal, fftPow2,
+  };
 }

@@ -23,9 +23,9 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[test]"
 
-      - name: Smoke test (import)
+      - name: Run test suite
         env:
           MPLBACKEND: Agg
-        run: python -c "import wavelabx; print('import OK')"
+        run: pytest -q

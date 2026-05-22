@@ -1,8 +1,7 @@
-
 """
 core.py
 
-Shared constants and core wave mechanics utilities for WaveLabX.
+Shared constants and core wave-mechanics utilities for WaveLabX.
 """
 
 import numpy as np
@@ -10,41 +9,54 @@ import numpy as np
 GRAVITY = 9.81
 
 
-def compute_wavelength(h: float, T: float, tol: float = 1e-5, max_iter: int = 50) -> float:
-    """Compute linear wave length L for given water depth h and period T
-    by solving the dispersion relation iteratively:
+def compute_wavelength(h: float, T: float, tol: float = 1e-10,
+                       max_iter: int = 100) -> float:
+    """Linear wavelength L for water depth h and wave period T.
 
-        ω² = g k tanh(k h),   where ω = 2π / T,  k = 2π / L
+    Solves the linear dispersion relation
+
+        omega**2 = g k tanh(k h),   omega = 2 pi / T,   k = 2 pi / L
+
+    for the wavenumber k using Newton-Raphson iteration, started from the
+    explicit Fenton & McKee (1990) approximation. Unlike the plain
+    fixed-point iteration L = L0 tanh(k h), Newton-Raphson converges
+    reliably across the full depth range, from deep to shallow water.
 
     Parameters
     ----------
     h : float
-        Water depth [m].
+        Still-water depth [m].
     T : float
         Wave period [s].
     tol : float, optional
-        Convergence tolerance on L [m].
+        Relative convergence tolerance on the wavenumber k.
     max_iter : int, optional
-        Maximum number of iterations.
+        Maximum number of Newton iterations.
 
     Returns
     -------
     L : float
-        Wave length [m].
+        Linear wavelength [m].
     """
     g = GRAVITY
-    w = 2.0 * np.pi / T
+    if T <= 0.0 or h <= 0.0:
+        raise ValueError("Water depth h and period T must both be positive.")
 
-    # Deep-water estimate as initial guess
-    L0 = g * T**2 / (2.0 * np.pi)
-    L = L0
+    omega = 2.0 * np.pi / T
 
+    # Fenton & McKee (1990) explicit initial estimate of the wavelength.
+    L_deep = g * T ** 2 / (2.0 * np.pi)
+    L_fm = L_deep * np.tanh((omega ** 2 * h / g) ** 0.75) ** (2.0 / 3.0)
+    k = 2.0 * np.pi / L_fm
+
+    # Newton-Raphson on f(k) = g k tanh(k h) - omega**2.
     for _ in range(max_iter):
-        k = 2.0 * np.pi / L
-        L_next = (g * T**2 / (2.0 * np.pi)) * np.tanh(k * h)
-        if abs(L_next - L) < tol:
-            L = L_next
+        th = np.tanh(k * h)
+        f = g * k * th - omega ** 2
+        dfdk = g * th + g * k * h * (1.0 - th ** 2)
+        dk = f / dfdk
+        k -= dk
+        if abs(dk) <= tol * k:
             break
-        L = L_next
 
-    return float(L)
+    return float(2.0 * np.pi / k)

@@ -1,0 +1,6 @@
+case,wave,array,Hi_m,Hr_m,Kr,retained_energy,Hi_true_m,Hr_true_m,Kr_true
+Synthetic regular,regular,synthetic 3-gauge,0.1131,0.0339,0.300,1.00,0.1131,0.0339,0.300
+Regular wave -- array 1,regular,seaward,0.1199,0.0151,0.126,0.94,,,
+Regular wave -- array 2,regular,shoreward,0.0117,0.0923,7.902,0.97,,,
+JONSWAP -- array 1,irregular,seaward,0.0557,0.0447,0.803,0.95,,,
+JONSWAP -- array 2,irregular,shoreward,0.0570,0.0315,0.553,0.96,,,

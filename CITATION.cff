@@ -1,14 +1,32 @@
 cff-version: 1.2.0
 title: WaveLabX
+message: "If you use this software, please cite it using these metadata."
+type: software
 authors:
   - family-names: Lamsal
     given-names: Sandesh
     orcid: "https://orcid.org/0009-0007-9267-4019"
+    affiliation: "University of Miami, Department of Civil and Architectural Engineering"
+  - family-names: Deveaux Garrido
+    given-names: Claudia
+    affiliation: "University of Miami, Department of Civil and Architectural Engineering"
+  - family-names: Haus
+    given-names: Brian K.
+    affiliation: "University of Miami, Department of Ocean Sciences, Rosenstiel School of Marine, Atmospheric, and Earth Science"
   - family-names: Rhode-Barbarigos
     given-names: Landolf
     orcid: "https://orcid.org/0000-0001-7550-800X"
+    affiliation: "University of Miami, Department of Civil and Architectural Engineering"
 repository-code: https://github.com/sandslamsal/WaveLabX
+url: https://wave-lab-x.vercel.app
 doi: 10.5281/zenodo.20217994
 license: MIT
-version: 0.2.0
-date-released: 2026-05-15
+version: 0.3.0
+date-released: 2026-05-22
+keywords:
+  - wave reflection
+  - Goda-Suzuki method
+  - wave flume
+  - physical modeling
+  - coastal engineering
+  - signal processing

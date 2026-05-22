@@ -21,7 +21,6 @@ def reflection_analysis(
     gpos: tuple[float, ...],
     prefer_three_probe: bool = True,
     min_retained_energy: float = 0.8,
-    window: str | None = None,
     min_two_probe_retained_energy: float = 0.8,
 ) -> dict:
     """
@@ -56,7 +55,8 @@ def reflection_analysis(
         raise ValueError("gpos length must match number of columns in eta.")
 
     # --- Zero-crossing on probe 1 for a representative period
-    zc = zero_crossing(eta[:, 0], fs)
+    # zero_crossing returns (result_dict, names); only the dict is needed here.
+    zc, _ = zero_crossing(eta[:, 0], fs)
     Hs = float(zc["Hs"])
     Tmean = float(zc["Tmean"])
     Lp = float(compute_wavelength(h, Tmean))
@@ -76,7 +76,6 @@ def reflection_analysis(
                     h=h,
                     gpos=(gpos[i], gpos[j]),
                     plot=False,
-                    window=window,
                 )
                 tp["pair"] = (i + 1, j + 1)  # 1-based
                 tp["dx_over_Lp"] = float(r)
@@ -109,7 +108,6 @@ def reflection_analysis(
             h=h,
             gpos=(gpos[0], gpos[1], gpos[2]),
             plot=False,
-            window=window,
             min_retained_energy=min_retained_energy,
         )
         out["three_probe"] = th
