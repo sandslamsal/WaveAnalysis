@@ -56,20 +56,28 @@ Python entry points (`wavelabx` package):
   single co-linear pair.
 - `three_probe_array(eta123, fs, h, gpos)` — redundant three-probe array;
   averages the three valid probe pairs at each frequency.
-- `reflection_analysis(eta, fs, h, gpos)` — high-level wrapper that picks the
-  recommended method per array based on geometry and the retained-energy
-  fraction.
+- `reflection_analysis(eta, fs, h, gpos)` — high-level wrapper that runs the
+  three-probe routine, evaluates all three two-probe pairs, and selects the
+  three-probe result when it retains at least 80% of the spectral energy;
+  otherwise it falls back to the best admissible two-probe pair.
 
 JavaScript entry points (`web/spectral.js`):
 
-- `twoProbeGoda(col1, col2, fs, h, pos1, pos2)` — mirror of
-  `two_probe_goda`.
+- `twoProbeGoda(col1, col2, fs, h, pos1, pos2)` — mirror of `two_probe_goda`.
 - `threeProbeArray(cols, fs, h, pos)` — mirror of `three_probe_array`.
+- `reflectionAnalysis(cols, fs, h, pos)` — mirror of `reflection_analysis`;
+  same method-selection logic, same numbers.
 
-The browser UI (`web/index.html`) drives `threeProbeArray` by default for
-each six-channel CSV upload (treated as two co-linear three-gauge arrays). It
-falls back to a well-conditioned two-probe pair when the three-probe inversion
-is ill-conditioned at the analysis frequency.
+The browser UI (`web/index.html`) routes both Regular and Irregular wave
+modes through `reflectionAnalysis`. The toggle now controls only the UI
+(peak-frequency display, skip/use-waves window) — the analysis path itself is
+identical in both modes and matches the Python pipeline. Each row in the
+results table carries a small "3P" or "2P" badge per array, indicating
+whether the row used the three-probe redundant average or the best
+two-probe fallback. The badge is also written to the exported CSV
+(`Method1`, `Method2` columns). The JS↔Python parity tests in the suite
+cross-check `twoProbeGoda`, `threeProbeArray` and `reflectionAnalysis`
+against their Python counterparts.
 
 ## Browser tool
 

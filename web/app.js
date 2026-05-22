@@ -7,43 +7,8 @@
 "use strict";
 
 const G = 9.81;            // gravitational acceleration [m/s^2]
-const COND_LIMIT = 30.0;   // 3-probe -> 2-probe fallback threshold
 const DL_MIN = 0.05;       // valid spacing range  0.05 <= dl/L <= 0.45
 const DL_MAX = 0.45;
-
-/* ---------------------------------------------------------------------------
- * Complex arithmetic — complex numbers are {re, im}
- * ------------------------------------------------------------------------- */
-const cAdd = (a, b) => ({ re: a.re + b.re, im: a.im + b.im });
-const cSub = (a, b) => ({ re: a.re - b.re, im: a.im - b.im });
-const cMul = (a, b) => ({
-  re: a.re * b.re - a.im * b.im,
-  im: a.re * b.im + a.im * b.re,
-});
-const cConj = (a) => ({ re: a.re, im: -a.im });
-const cAbs = (a) => Math.hypot(a.re, a.im);
-const cExp = (theta) => ({ re: Math.cos(theta), im: Math.sin(theta) }); // e^{i*theta}
-
-/* Solve a 2x2 complex system  [[a,b],[c,d]] x = [p,q]. */
-function solve2x2(a, b, c, d, p, q) {
-  const det = cSub(cMul(a, d), cMul(b, c));
-  const dd = det.re * det.re + det.im * det.im;
-  if (dd < 1e-30) return [{ re: 0, im: 0 }, { re: 0, im: 0 }];
-  const invDet = { re: det.re / dd, im: -det.im / dd };
-  const x0 = cMul(cSub(cMul(d, p), cMul(b, q)), invDet);
-  const x1 = cMul(cSub(cMul(a, q), cMul(c, p)), invDet);
-  return [x0, x1];
-}
-
-/* Condition number of a 2x2 Hermitian PD matrix [[a,b],[b*,d]], a,d real. */
-function condHermitian2(a, b, d) {
-  const tr = a + d;
-  const disc = Math.sqrt(((a - d) / 2) ** 2 + (b.re ** 2 + b.im ** 2));
-  const lMax = tr / 2 + disc;
-  const lMin = tr / 2 - disc;
-  if (lMin <= 1e-30) return Infinity;
-  return Math.sqrt(lMax / lMin);
-}
 
 /* ---------------------------------------------------------------------------
  * Linear dispersion relation  omega^2 = g k tanh(k d)  -> wave number k
@@ -134,78 +99,13 @@ function detectFrequency(columns, fs, fmin, fmax) {
 }
 
 /* ---------------------------------------------------------------------------
- * Single-bin DFT amplitudes of three Hann-windowed gauge records.
+ * Note: the in-page single-frequency three-probe routine that used to live
+ * here has been removed. Both Regular and Irregular modes now route through
+ * WaveLabXSpectral.reflectionAnalysis (see web/spectral.js), which mirrors
+ * Python's wavelabx.analysis.reflection_analysis: a redundant three-probe
+ * with automatic fallback to the best admissible two-probe pair when the
+ * three-probe retained-energy falls below 80%.
  * ------------------------------------------------------------------------- */
-function gaugeAmplitudes(columns, fs, fTarget) {
-  const N = columns[0].length;
-  const w = hann(N);
-  const df = fs / N;
-  let idx = Math.round(fTarget / df);
-  idx = Math.max(1, Math.min(idx, Math.floor(N / 2)));
-  const binFreq = idx * df;
-
-  const A = [];
-  for (let j = 0; j < 3; j++) {
-    const col = columns[j];
-    const mean = colMean(col);
-    let re = 0, im = 0;
-    for (let n = 0; n < N; n++) {
-      const ang = (-2 * Math.PI * idx * n) / N;
-      const v = (col[n] - mean) * w[n];
-      re += v * Math.cos(ang);
-      im += v * Math.sin(ang);
-    }
-    A.push({ re: (2 * re) / w.sum, im: (2 * im) / w.sum });
-  }
-  return { A, binFreq };
-}
-
-/* ---------------------------------------------------------------------------
- * Goda-Suzuki three-probe separation for one gauge array.
- * ------------------------------------------------------------------------- */
-function threeProbe(columns, fs, fTarget, depth, pos) {
-  const { A, binFreq } = gaugeAmplitudes(columns, fs, fTarget);
-  const k = dispersion(binFreq, depth);
-
-  const inc = pos.map((x) => cExp(-k * x));   // incident   e^{-i k x}
-  const ref = pos.map((x) => cExp(k * x));    // reflected  e^{+i k x}
-
-  // (M^H M)[0][1] = sum_j e^{+2 i k x_j};  diagonal entries = 3
-  let off = { re: 0, im: 0 };
-  for (let j = 0; j < 3; j++) off = cAdd(off, cExp(2 * k * pos[j]));
-  const cond3 = condHermitian2(3, off, 3);
-
-  let Hi, Hr, fallback = false;
-
-  if (cond3 < COND_LIMIT) {
-    let p = { re: 0, im: 0 }, q = { re: 0, im: 0 };
-    for (let j = 0; j < 3; j++) {
-      p = cAdd(p, cMul(cConj(inc[j]), A[j]));
-      q = cAdd(q, cMul(cConj(ref[j]), A[j]));
-    }
-    const sol = solve2x2(
-      { re: 3, im: 0 }, off,
-      cConj(off), { re: 3, im: 0 },
-      p, q
-    );
-    Hi = 2 * cAbs(sol[0]);
-    Hr = 2 * cAbs(sol[1]);
-  } else {
-    fallback = true;
-    const pairs = [[0, 1], [1, 2], [0, 2]];
-    let best = pairs[0], bestCond = Infinity;
-    for (const [i, j] of pairs) {
-      const o = cAdd(cExp(2 * k * pos[i]), cExp(2 * k * pos[j]));
-      const c = condHermitian2(2, o, 2);
-      if (c < bestCond) { bestCond = c; best = [i, j]; }
-    }
-    const [i, j] = best;
-    const sol = solve2x2(inc[i], ref[i], inc[j], ref[j], A[i], A[j]);
-    Hi = 2 * cAbs(sol[0]);
-    Hr = 2 * cAbs(sol[1]);
-  }
-  return { Hi, Hr, fallback, k, binFreq };
-}
 
 /* ---------------------------------------------------------------------------
  * CSV parsing — 6 numeric columns, optional header row.
@@ -278,57 +178,30 @@ function analyzeRecord(rec, redetect) {
     return;
   }
 
-  // ===== IRREGULAR (spectral) mode ====================================
-  if (mode === "irregular") {
-    if (!(rec.depth > 0)) {
-      rec.error = "Set water depth";
-      rec.result = null;
-      return;
-    }
-    const SP = typeof WaveLabXSpectral !== "undefined" ? WaveLabXSpectral
-      : typeof window !== "undefined" ? window.WaveLabXSpectral : null;
-    if (!SP) {
-      rec.error = "Spectral module not loaded";
-      rec.result = null;
-      return;
-    }
-    try {
-      const a1 = SP.threeProbeArray(rec.cols.slice(0, 3), s.fs, rec.depth, s.pos1);
-      const a2 = SP.threeProbeArray(rec.cols.slice(3, 6), s.fs, rec.depth, s.pos2);
-      rec.freq = a1.fp;                       // spectral-peak frequency
-      const ret = Math.min(a1.retained, a2.retained);
-      rec.result = {
-        Hi1: a1.Hi, Hr1: a1.Hr, Kr1: a1.Kr,
-        Hi2: a2.Hi, Hr2: a2.Hr, Kr2: a2.Kr,
-        Kt: a1.Hi > 0 ? a2.Hi / a1.Hi : NaN,
-        period: a1.Tp,
-        fallback: false, ratioWarn: false,
-        retained: ret, retainedWarn: !(ret >= 0.8),
-        spectral: true,
-      };
-    } catch (e) {
-      rec.error = "Computation failed: " + e.message;
-      rec.result = null;
-    }
-    return;
-  }
-
-  // ===== REGULAR (single-frequency) mode ==============================
-  if (redetect && !rec.freqManual) {
-    const f = detectFrequency(rec.cols.slice(0, 3), s.fs, s.fmin, s.fmax);
-    if (f) rec.freq = f;
-  }
-  if (!(rec.depth > 0) || !(rec.freq > 0)) {
-    rec.error = "Set depth / frequency";
+  if (!(rec.depth > 0)) {
+    rec.error = "Set water depth";
     rec.result = null;
     return;
   }
-  try {
-    // Optional analysis window: skip the first M waves, then use N waves.
-    // Frequency is always detected on the full record; the window only
-    // restricts the three-probe computation.
-    let cols = rec.cols;
-    rec.windowInfo = null;
+  const SP = typeof WaveLabXSpectral !== "undefined" ? WaveLabXSpectral
+    : typeof window !== "undefined" ? window.WaveLabXSpectral : null;
+  if (!SP) {
+    rec.error = "Spectral module not loaded";
+    rec.result = null;
+    return;
+  }
+
+  // Regular mode supports an optional analysis window (skip-N-waves /
+  // use-N-waves), which slices the record before the spectral routine runs.
+  // The window needs an approximate wave period; we use the auto-detected
+  // peak frequency.
+  let cols = rec.cols;
+  rec.windowInfo = null;
+  if (mode === "regular") {
+    if (redetect && !rec.freqManual) {
+      const f = detectFrequency(rec.cols.slice(0, 3), s.fs, s.fmin, s.fmax);
+      if (f) rec.freq = f;
+    }
     if ((s.skipWaves > 0 || s.numWaves > 0) && rec.freq > 0) {
       const N = rec.cols[0].length;
       const spw = s.fs / rec.freq;                 // samples per wave
@@ -337,27 +210,53 @@ function analyzeRecord(rec, redetect) {
       start = Math.min(Math.max(start, 0), N);
       len = Math.min(Math.max(len, 0), N - start);
       if (len < 16) {
-        rec.error = "Analysis window too short — reduce skip or increase waves";
+        rec.error = "Analysis window too short - reduce skip or increase waves";
         rec.result = null;
         return;
       }
       cols = rec.cols.map((c) => c.slice(start, start + len));
       rec.windowInfo = { start, len, waves: len / spw };
     }
-    const a1 = threeProbe(cols.slice(0, 3), s.fs, rec.freq, rec.depth, s.pos1);
-    const a2 = threeProbe(cols.slice(3, 6), s.fs, rec.freq, rec.depth, s.pos2);
-    const L = wavelength(rec.freq, rec.depth);
-    const dl1 = (Math.max(...s.pos1) - Math.min(...s.pos1)) / L;
-    const dl2 = (Math.max(...s.pos2) - Math.min(...s.pos2)) / L;
+  }
+
+  try {
+    // Same routine for both regular and irregular modes: a high-level call
+    // that runs the three-probe routine, evaluates all two-probe pairs, and
+    // selects the three-probe result when it retains >= 80% of the spectral
+    // energy; otherwise falls back to the best admissible two-probe pair.
+    // This matches the Python wavelabx.analysis.reflection_analysis pipeline.
+    const a1 = SP.reflectionAnalysis(cols.slice(0, 3), s.fs, rec.depth, s.pos1);
+    const a2 = SP.reflectionAnalysis(cols.slice(3, 6), s.fs, rec.depth, s.pos2);
+
+    // Peak frequency / period
+    if (mode === "irregular") rec.freq = a1.fp || rec.freq;
+    const period = (a1.Tp != null && Number.isFinite(a1.Tp)) ? a1.Tp
+      : (rec.freq > 0 ? 1 / rec.freq : NaN);
+
+    // Goda spacing diagnostic for the current dominant frequency
+    const L = (rec.freq > 0) ? wavelength(rec.freq, rec.depth) : NaN;
+    const dl1 = Number.isFinite(L) && L > 0
+      ? (Math.max(...s.pos1) - Math.min(...s.pos1)) / L : NaN;
+    const dl2 = Number.isFinite(L) && L > 0
+      ? (Math.max(...s.pos2) - Math.min(...s.pos2)) / L : NaN;
+
+    // Whether a two-probe fallback was selected for either array.
+    const fallback1 = a1.method_used === "two_probe";
+    const fallback2 = a2.method_used === "two_probe";
+    const ret = Math.min(a1.retained, a2.retained);
+
     rec.result = {
-      Hi1: a1.Hi, Hr1: a1.Hr, Kr1: a1.Hi > 0 ? a1.Hr / a1.Hi : NaN,
-      Hi2: a2.Hi, Hr2: a2.Hr, Kr2: a2.Hi > 0 ? a2.Hr / a2.Hi : NaN,
+      Hi1: a1.Hi, Hr1: a1.Hr, Kr1: a1.Kr,
+      Hi2: a2.Hi, Hr2: a2.Hr, Kr2: a2.Kr,
       Kt: a1.Hi > 0 ? a2.Hi / a1.Hi : NaN,
-      period: 1 / rec.freq,
-      fallback: a1.fallback || a2.fallback,
+      period,
+      method1: a1.method_used, method2: a2.method_used,
+      fallback: fallback1 || fallback2,
       L, dl1, dl2,
-      ratioWarn: dl1 < DL_MIN || dl1 > DL_MAX || dl2 < DL_MIN || dl2 > DL_MAX,
-      spectral: false,
+      ratioWarn: Number.isFinite(dl1) && Number.isFinite(dl2)
+        && (dl1 < DL_MIN || dl1 > DL_MAX || dl2 < DL_MIN || dl2 > DL_MAX),
+      retained: ret, retainedWarn: !(ret >= 0.8),
+      spectral: mode === "irregular",
     };
   } catch (e) {
     rec.error = "Computation failed: " + e.message;
@@ -410,14 +309,20 @@ function renderTable() {
       const warnRow = r.fallback || r.ratioWarn || r.retainedWarn;
       const cls = warnRow ? ' class="fallback"' : "";
       const flag = warnRow ? " &#9888;" : "";
+      // Per-array method indicator: 3P (three-probe) or 2P (two-probe fallback).
+      const badge = (m) => m === "two_probe"
+        ? '<span class="meth-2p" title="Two-probe fallback (three-probe inversion ill-conditioned)">2P</span>'
+        : '<span class="meth-3p" title="Three-probe redundant array">3P</span>';
+      const m1 = badge(r.method1);
+      const m2 = badge(r.method2);
       tr.innerHTML = `
         <td title="${rec.name}">${rec.name}${flag}</td>
         ${depthCell}${freqCell}
         <td>${fmt(r.period, 3)}</td>
-        <td${cls}>${fmt(r.Hi1)}</td>
+        <td${cls}>${fmt(r.Hi1)} ${m1}</td>
         <td${cls}>${fmt(r.Hr1)}</td>
         <td${cls}>${fmt(r.Kr1, 3)}</td>
-        <td${cls}>${fmt(r.Hi2)}</td>
+        <td${cls}>${fmt(r.Hi2)} ${m2}</td>
         <td${cls}>${fmt(r.Hr2)}</td>
         <td${cls}>${fmt(r.Kr2, 3)}</td>
         <td>${fmt(r.Kt, 3)}</td>
@@ -1219,7 +1124,8 @@ function readFiles(fileList) {
 function exportCSV() {
   const head = [
     "File", "Depth_d_m", "Freq_f_Hz", "Period_T_s",
-    "Hi1_m", "Hr1_m", "Kr1", "Hi2_m", "Hr2_m", "Kr2",
+    "Hi1_m", "Hr1_m", "Kr1", "Method1",
+    "Hi2_m", "Hr2_m", "Kr2", "Method2",
     "Kt_Hi2overHi1", "Wavelength_L_m", "Fallback2probe", "SpacingRatioWarn",
   ];
   const rows = [head.join(",")];
@@ -1227,14 +1133,14 @@ function exportCSV() {
     const r = rec.result;
     if (!r) {
       rows.push([`"${rec.name}"`, rec.depth ?? "", rec.freq ?? "",
-        "", "", "", "", "", "", "", "", "", "", rec.error || "error"].join(","));
+        "", "", "", "", "", "", "", "", "", "", "", "", rec.error || "error"].join(","));
       return;
     }
     const g = (x, p) => (x == null || Number.isNaN(x) ? "" : x.toFixed(p));
     rows.push([
       `"${rec.name}"`, g(rec.depth, 4), g(rec.freq, 5), g(r.period, 4),
-      g(r.Hi1, 6), g(r.Hr1, 6), g(r.Kr1, 4),
-      g(r.Hi2, 6), g(r.Hr2, 6), g(r.Kr2, 4),
+      g(r.Hi1, 6), g(r.Hr1, 6), g(r.Kr1, 4), r.method1 || "",
+      g(r.Hi2, 6), g(r.Hr2, 6), g(r.Kr2, 4), r.method2 || "",
       g(r.Kt, 4), g(r.L, 4),
       r.fallback ? "yes" : "no", r.ratioWarn ? "yes" : "no",
     ].join(","));
@@ -1416,5 +1322,5 @@ if (typeof document !== "undefined") {
 
 /* expose core functions for Node-based testing */
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { threeProbe, dispersion, wavelength, detectFrequency, parseCSV, parseDepth };
+  module.exports = { dispersion, wavelength, detectFrequency, parseCSV, parseDepth };
 }

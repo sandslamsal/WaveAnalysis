@@ -233,6 +233,19 @@ td.editable input {
 td.fallback { color: var(--warn); }
 .badge-err { color: var(--warn); font-weight: 600; }
 
+/* Per-array method badge: 3P = three-probe (default), 2P = two-probe fallback */
+.meth-3p, .meth-2p {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.meth-3p { color: #1f5fa6; background: #e6efff; border: 1px solid #c9dcff; }
+.meth-2p { color: #b65300; background: #fff1df; border: 1px solid #ffd8a8; }
+
 .row-del {
   border: none;
   background: none;

@@ -150,6 +150,7 @@ def test_reflection_analysis_end_to_end(synthetic_array):
 _NODE = shutil.which("node")
 _JS_RUNNER_3P = os.path.join(os.path.dirname(__file__), "js_three_probe_runner.js")
 _JS_RUNNER_2P = os.path.join(os.path.dirname(__file__), "js_two_probe_runner.js")
+_JS_RUNNER_REF = os.path.join(os.path.dirname(__file__), "js_reflection_runner.js")
 
 
 @pytest.mark.skipif(_NODE is None, reason="Node.js not available")
@@ -212,3 +213,36 @@ def test_python_js_two_probe_consistency():
     assert abs(js["Hi"] - py["Hi"]) / py["Hi"] < 5e-3
     assert abs(js["Hr"] - py["Hr"]) / py["Hr"] < 5e-3
     assert abs(js["Kr"] - py["Kr"]) < 5e-3
+
+
+@pytest.mark.skipif(_NODE is None, reason="Node.js not available")
+def test_python_js_reflection_analysis_consistency():
+    """web/spectral.js reflectionAnalysis reproduces wavelabx.reflection_analysis."""
+    gpos = (0.0, 0.35, 0.70)
+    eta, _ = _synthetic_irregular_gauges(
+        fs=FS, duration=120.0, h=H, gpos=gpos,
+        Tpeak=TPEAK, Hi=HI, Kr=KR, seed=13,
+    )
+    py = reflection_analysis(eta, fs=FS, h=H, gpos=gpos)
+    py_method = py["method_used"]
+    py_pick = py["three_probe"] if py_method == "three_probe" else py["two_probe_best"]
+
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    try:
+        json.dump({"eta": eta.tolist(), "fs": FS, "h": H, "pos": list(gpos)}, tmp)
+        tmp.close()
+        proc = subprocess.run(
+            [_NODE, _JS_RUNNER_REF, tmp.name],
+            capture_output=True, text=True, check=True,
+        )
+        js = json.loads(proc.stdout)
+    finally:
+        os.unlink(tmp.name)
+
+    # Same method selected on both sides.
+    assert js["method_used"] == py_method, (
+        f"Method mismatch: js={js['method_used']}, py={py_method}")
+    # Numeric agreement on whichever method was selected.
+    assert abs(js["Hi"] - py_pick["Hi"]) / py_pick["Hi"] < 5e-3
+    assert abs(js["Hr"] - py_pick["Hr"]) / py_pick["Hr"] < 5e-3
+    assert abs(js["Kr"] - py_pick["Kr"]) < 5e-3

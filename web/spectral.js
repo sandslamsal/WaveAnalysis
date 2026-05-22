@@ -386,6 +386,78 @@ function twoProbeGoda(col1, col2, fs, h, pos1, pos2) {
 }
 
 /* ---------------------------------------------------------------------------
+ * High-level reflection analysis with automatic method selection.
+ * Mirror of wavelabx.analysis.reflection_analysis(): runs the three-probe
+ * routine, evaluates all three two-probe pairs, and selects three-probe
+ * when its retained-energy fraction is >= min_retained_energy; otherwise
+ * picks the best admissible two-probe pair (highest retained energy).
+ *
+ *   cols : [number[], number[], number[]]   three gauge time series
+ *   fs   : sampling frequency [Hz]
+ *   h    : water depth [m]
+ *   pos  : [x1, x2, x3] gauge positions [m]
+ *   opts : { minRetainedEnergy = 0.8, preferThreeProbe = true }
+ *
+ * Returns { Hi, Hr, Kr, retained, method_used, three_probe, two_probe_best,
+ *           two_probe_all, fp, Tp, spectra }
+ * ------------------------------------------------------------------------- */
+function reflectionAnalysis(cols, fs, h, pos, opts) {
+  const minRet = (opts && opts.minRetainedEnergy != null)
+    ? opts.minRetainedEnergy : 0.8;
+  const preferThree = (opts && opts.preferThreeProbe != null)
+    ? opts.preferThreeProbe : true;
+
+  // 1) Three-probe spectral
+  const th = threeProbeArray(cols, fs, h, pos);
+
+  // 2) All three two-probe pairs (j > i)
+  const pairs = [[0, 1], [0, 2], [1, 2]];
+  const twoAll = pairs.map(([i, j]) => {
+    const r = twoProbeGoda(cols[i], cols[j], fs, h, pos[i], pos[j]);
+    r.pair = [i + 1, j + 1];                   // 1-based labels
+    r.dx = Math.abs(pos[j] - pos[i]);
+    return r;
+  });
+
+  // Admissible: a two-probe pair that retained any spectral energy (the
+  // spacing band is already enforced inside twoProbeGoda; here we just
+  // accept any pair that produced a finite, non-zero result).
+  const admissible = twoAll.filter((r) =>
+    Number.isFinite(r.retained) && r.retained > 0 && r.Hi > 0);
+
+  // Pick best by retained energy descending.
+  let bestTwo = null;
+  if (admissible.length > 0) {
+    bestTwo = admissible.slice().sort((a, b) => b.retained - a.retained)[0];
+  }
+
+  // 3) Method selection (mirrors Python reflection_analysis)
+  let methodUsed = "three_probe";
+  let useThree = false;
+  if (preferThree && Number.isFinite(th.retained) && th.retained >= minRet) {
+    useThree = true;
+  }
+  if (!useThree && bestTwo
+      && Number.isFinite(bestTwo.retained)
+      && bestTwo.retained >= minRet) {
+    methodUsed = "two_probe";
+  }
+
+  const out = methodUsed === "two_probe" ? bestTwo : th;
+
+  return {
+    Hi: out.Hi, Hr: out.Hr, Kr: out.Kr,
+    retained: out.retained,
+    method_used: methodUsed,
+    three_probe: th,
+    two_probe_best: bestTwo,
+    two_probe_all: twoAll,
+    fp: th.fp, Tp: th.Tp,
+    spectra: th.spectra,
+  };
+}
+
+/* ---------------------------------------------------------------------------
  * Auto-spectrum (power spectral density) of one gauge record.
  * Same one-sided estimator as the per-gauge Sn in three_probe_array.
  *   col : number[]   single gauge time series
@@ -421,11 +493,13 @@ function autoSpectrum(col, fs) {
 /* exports for browser + Node */
 if (typeof window !== "undefined") {
   window.WaveLabXSpectral = {
-    twoProbeGoda, threeProbeArray, autoSpectrum, spComputeWavelength, dftReal,
+    twoProbeGoda, threeProbeArray, reflectionAnalysis,
+    autoSpectrum, spComputeWavelength, dftReal,
   };
 }
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    twoProbeGoda, threeProbeArray, autoSpectrum, spComputeWavelength, dftReal, fftPow2,
+    twoProbeGoda, threeProbeArray, reflectionAnalysis,
+    autoSpectrum, spComputeWavelength, dftReal, fftPow2,
   };
 }

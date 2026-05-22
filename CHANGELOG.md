@@ -7,12 +7,26 @@ All notable changes to WaveLabX are recorded here. The format is based on
 ## [0.3.0] - 2026-05-22
 
 ### Added
+- High-level `reflectionAnalysis()` in `web/spectral.js`, a JavaScript
+  mirror of Python's `wavelabx.analysis.reflection_analysis`. It runs the
+  redundant three-probe routine, evaluates the three two-probe pairs, and
+  selects the three-probe result when its retained-energy fraction is at
+  least 80%; otherwise it falls back to the best admissible two-probe pair.
+  The browser UI and the Python package now follow the same method-selection
+  pipeline.
+- Cross-implementation parity test
+  `test_python_js_reflection_analysis_consistency` verifying that the
+  JavaScript and Python reflection-analysis pipelines pick the same method
+  and agree on Hi, Hr and Kr.
 - Explicit two-probe Goda–Suzuki routine in the browser core
   (`twoProbeGoda` in `web/spectral.js`), mirroring the Python
   `two_probe_goda` so both interfaces expose the same set of methods.
 - Cross-implementation parity test `test_python_js_two_probe_consistency`
   verifying that the JavaScript and Python two-probe routines agree on
   identical inputs.
+- Per-array method-used badge ("3P" or "2P") in the browser results table,
+  with matching color-coded styling and a new `Method1` / `Method2` column
+  in the CSV export.
 - `scripts/multi_example_test.py` and `results/multi_example_results.csv`
   reproducing the three illustrative cases reported in the paper
   (synthetic regular, real regular, real JONSWAP irregular) with their
