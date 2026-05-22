@@ -35,51 +35,68 @@
           Following the methodology of <strong>Goda &amp; Suzuki
           (1976)</strong> and <strong>Kobayashi, Cox &amp; Wurjanto
           (1990)</strong>, incident and reflected wave heights are
-          separated from the records of three co-linear capacitance wave
-          probes using linear wave theory. Two probe arrays are deployed
-          &mdash; one seaward and one shoreward of the structure. For each
-          array the complex wave amplitude at the wave frequency is
-          obtained from a Hann-windowed discrete Fourier transform of each
-          gauge record (the DC offset is removed first). The wave number
-          <i>k</i> follows from the linear dispersion relation
-          &omega;&sup2;&nbsp;=&nbsp;<i>gk</i>&nbsp;tanh(<i>kd</i>), and the
-          incident and reflected amplitudes <i>a<sub>i</sub></i>,
-          <i>a<sub>r</sub></i> are recovered by complex least squares over
-          the three gauges:
+          separated from co-linear capacitance wave-probe records using
+          linear wave theory. The free surface is modeled at each
+          frequency as a superposition of incident and reflected linear
+          waves; the Fourier coefficients of each gauge are combined to
+          solve a 2&times;2 system for the incident and reflected
+          amplitudes <i>a<sub>i</sub></i>, <i>a<sub>r</sub></i>:
           <i>A<sub>j</sub></i>&nbsp;=&nbsp;<i>a<sub>i</sub></i>e<sup>&minus;ikx<sub>j</sub></sup>
           +&nbsp;<i>a<sub>r</sub></i>e<sup>+ikx<sub>j</sub></sup>.
+          The wave number <i>k</i> follows from the linear dispersion
+          relation &omega;&sup2;&nbsp;=&nbsp;<i>gk</i>&nbsp;tanh(<i>kd</i>),
+          solved by Newton&ndash;Raphson iteration from a
+          Fenton&ndash;McKee seed. A Bluestein-algorithm DFT handles
+          records of arbitrary length.
         </p>
         <p>
-          The method is valid when the probe spacing &Delta;<i>l</i>
-          satisfies <strong>0.05&nbsp;&le;&nbsp;&Delta;<i>l</i>/<i>L</i>&nbsp;&le;&nbsp;0.45</strong>,
-          where <i>L</i> is the local wavelength; outside this range a
-          gauge pair becomes ill-conditioned and the tool automatically
-          falls back to the best-conditioned pair. In the SEAHIVE
-          experiments, water levels were sampled at 100&nbsp;Hz on either
-          side of the structure under regular (monochromatic) waves. Wave
-          height is twice the recovered amplitude, and the coefficients
-          are defined as <i>K<sub>t</sub></i>&nbsp;=&nbsp;<i>H<sub>t</sub></i>/<i>H<sub>i</sub></i>
-          and <i>K<sub>r</sub></i>&nbsp;=&nbsp;<i>H<sub>r</sub></i>/<i>H<sub>i</sub></i>.
+          The method is valid when the probe spacing &Delta;<i>x</i>
+          satisfies <strong>0.05&nbsp;&le;&nbsp;&Delta;<i>x</i>/<i>L</i>&nbsp;&le;&nbsp;0.45</strong>,
+          where <i>L</i> is the local wavelength. The tool checks this
+          band and the 2&times;2 inversion conditioning at every
+          frequency and discards bins that fail either test; the fraction
+          of measured spectral energy that survives this filter is
+          reported as the retained-energy fraction. Incident and
+          reflected spectra are integrated to the spectral significant
+          wave heights
+          <i>H<sub>m0</sub></i>&nbsp;=&nbsp;4&radic;<i>m</i><sub>0</sub>,
+          and the coefficients are defined as
+          <i>K<sub>r</sub></i>&nbsp;=&nbsp;<i>H<sub>r</sub></i>/<i>H<sub>i</sub></i>
+          and (when two arrays are present)
+          <i>K<sub>t</sub></i>&nbsp;=&nbsp;<i>H<sub>i,2</sub></i>/<i>H<sub>i,1</sub></i>.
         </p>
         <p>
-          <strong>Regular vs. irregular waves.</strong> For
-          <em>regular</em> (monochromatic) waves the separation is
-          performed at the single dominant frequency, detected from the
-          signal spectrum, and the wave height is twice the recovered
-          amplitude. For <em>irregular</em> (random) waves the separation
-          is performed at every frequency bin; incident and reflected
-          spectra are integrated to spectral significant wave heights
-          <i>H<sub>m0</sub></i>&nbsp;=&nbsp;4&radic;<i>m</i><sub>0</sub>
-          (a faithful port of the WaveLabX <code>three_probe_array</code>
-          method). Choose the mode with the toggle below.
+          <strong>Method selection.</strong> The default analysis is the
+          redundant <em>three-probe</em> array of <code>spectral.js</code>
+          (<code>reflectionAnalysis</code>): the three probe pairs are
+          averaged at every valid frequency, and the result is reported
+          as long as it retains at least 80&nbsp;% of the spectral
+          energy. When the three-probe inversion is ill-conditioned, the
+          tool falls back to the best admissible two-probe pair and
+          flags the row with a small "2P" badge in the results table
+          (otherwise a "3P" badge is shown). The
+          <strong>Analysis method</strong> dropdown in the settings panel
+          lets the user override this selection: force three-probe with
+          no fallback, force two-probe on the best pair, or force a
+          specific two-probe pair (1&ndash;2, 1&ndash;3 or 2&ndash;3)
+          &mdash; useful for cross-checking a published result with a
+          different method.
         </p>
         <p class="muted small">
-          Each input file holds six time-series columns:
-          channels&nbsp;1&ndash;3 form probe array&nbsp;1 (seaward &rarr;
-          <i>H<sub>i1</sub></i>, <i>H<sub>r1</sub></i>),
-          channels&nbsp;4&ndash;6 form probe array&nbsp;2 (shoreward &rarr;
-          <i>H<sub>i2</sub></i>, <i>H<sub>r2</sub></i>). Water depth
-          is set below and may be overridden per file.
+          Input files: <strong>2, 3 or 6 numeric columns</strong>, detected
+          automatically. Two columns run two-probe Goda&ndash;Suzuki on
+          the single pair (only <i>X<sub>12</sub></i> is used); three
+          columns run a three-probe array (with automatic two-probe
+          fallback); six columns run two three-probe arrays in the same
+          file (channels&nbsp;1&ndash;3 seaward, channels&nbsp;4&ndash;6
+          shoreward). Water depth is set below and may be overridden per
+          file (auto-read from "Depth=<i>d</i>" in the file name when
+          present). The Python entry points
+          <code>two_probe_goda</code>, <code>three_probe_array</code> and
+          <code>reflection_analysis</code> in the WaveLabX package match
+          this tool's outputs to a few parts in 1000, verified by
+          automated JavaScript&harr;Python cross-checks in the test
+          suite.
         </p>
       </div>
     </details>
