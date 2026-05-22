@@ -139,10 +139,7 @@
           </div>
         </div>
         <div class="field">
-          <label for="methodOverride">Analysis method
-            <span class="info-tip" tabindex="0"
-              title="Auto: three-probe with automatic two-probe fallback (default). Three-probe only: skip the fallback. Two-probe (best pair): use the best admissible pair. Two-probe (1-2 / 1-3 / 2-3): force that specific pair. For 2-channel CSVs the method is always two-probe Goda-Suzuki.">&#9432;</span>
-          </label>
+          <label for="methodOverride">Analysis method</label>
           <select id="methodOverride">
             <option value="auto" selected>Auto (3-probe + 2-probe fallback)</option>
             <option value="3p_only">Three-probe only (no fallback)</option>
@@ -151,6 +148,27 @@
             <option value="2p_1_3">Two-probe (gauges 1-3)</option>
             <option value="2p_2_3">Two-probe (gauges 2-3)</option>
           </select>
+          <details class="field-help">
+            <summary>What does this do?</summary>
+            <ul>
+              <li><strong>Auto</strong> &mdash; runs the three-probe redundant
+                array; if its retained-energy fraction falls below 80&nbsp;%,
+                falls back to the best admissible two-probe pair.</li>
+              <li><strong>Three-probe only</strong> &mdash; forces the
+                three-probe routine and never falls back, even if the inversion
+                is ill-conditioned (the row is flagged in the warning panel).</li>
+              <li><strong>Two-probe (best admissible pair)</strong> &mdash; skips
+                three-probe entirely and reports the two-probe pair with the
+                highest retained-energy fraction.</li>
+              <li><strong>Two-probe (gauges 1&ndash;2 / 1&ndash;3 / 2&ndash;3)</strong>
+                &mdash; forces that specific probe pair; intended for
+                cross-checking a published result with one method.</li>
+            </ul>
+            <p class="muted small">
+              For 2-channel CSVs the method is always two-probe
+              Goda&ndash;Suzuki regardless of this setting.
+            </p>
+          </details>
         </div>
       </div>
 
