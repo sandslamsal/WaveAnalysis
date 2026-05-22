@@ -38,8 +38,10 @@ DATA = os.path.join("data", "jonswap_example.csv")
 # order of increasing position along the direction of wave propagation; `gpos`
 # are the corresponding gauge positions [m].
 ARRAYS = [
-    ("Array 1 (gauges 1-3)", [0, 1, 2], (0.0, 0.45, 0.75)),
-    ("Array 2 (gauges 4-6)", [5, 4, 3], (0.0, 0.45, 0.75)),
+    # Channels are read in natural CSV order to match the browser application
+    # (web/app.js); positions follow the browser-application defaults. Only
+    # the seaward array is plotted in the manuscript figure.
+    ("Seaward array (gauges 1-3)", [0, 1, 2], (0.0, 0.45, 0.75)),
 ]
 
 BLUE, RED = "#1f77b4", "#d62728"
@@ -62,7 +64,10 @@ def main():
           f"fs={FS:g} Hz, h={H:g} m)\n")
 
     plt.rcParams.update({"font.size": 9})
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.2), constrained_layout=True)
+    nax = len(ARRAYS)
+    fig, axes = plt.subplots(1, nax, figsize=(3.8 * nax, 3.2),
+                             constrained_layout=True, squeeze=False)
+    axes = axes.flatten()
 
     results = []
     for ax, (name, cols, gpos) in zip(axes, ARRAYS):
@@ -103,9 +108,8 @@ def main():
     plt.close(fig)
     print(f"Wrote {path}")
 
-    h1, h2 = results[0]["Hi"], results[1]["Hi"]
-    print(f"\nIncident-height agreement between the two arrays: "
-          f"{abs(h1 - h2) / max(h1, h2) * 100:.1f}%")
+    # Note: the script now plots only the seaward array (channels 1-3),
+    # which matches the figure used in the manuscript.
 
 
 if __name__ == "__main__":

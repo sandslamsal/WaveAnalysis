@@ -32,13 +32,19 @@ from wavelabx.three_probe import three_probe_array
 
 FS = 100.0                       # sampling rate [Hz] (lab standard)
 
+# Channels are read in natural CSV order P1..P6. The seaward array uses
+# channels 0,1,2 (P1-P3), the shoreward array channels 3,4,5 (P4-P6).
+# This matches the browser application (web/app.js), so both produce the
+# same Hi (wave moving away from the wavemaker) and Hr (wave moving back)
+# for each array.
+
 # Regular-wave (real + synthetic) gauge positions: ExperimentalSetup figure.
-ARR1_REG = (0.0, 0.60, 0.90)     # seaward array, X12=0.60, X23=0.30
-ARR2_REG = (0.0, 0.60, 0.90)     # shoreward array (P6,P5,P4 reorder): X56=0.60, X45=0.30
+ARR1_REG = (0.0, 0.60, 0.90)     # seaward array [P1,P2,P3]: X12=0.60, X23=0.30
+ARR2_REG = (0.0, 0.30, 0.90)     # shoreward array [P4,P5,P6]: X45=0.30, X56=0.60
 
 # JONSWAP irregular-wave gauge positions: browser-app default spacings.
-ARR1_JON = (0.0, 0.45, 0.75)     # seaward array, X12=0.45, X23=0.30
-ARR2_JON = (0.0, 0.45, 0.75)     # shoreward array (P6,P5,P4 reorder): X56=0.45, X45=0.30
+ARR1_JON = (0.0, 0.45, 0.75)     # seaward array [P1,P2,P3]: X12=0.45, X23=0.30
+ARR2_JON = (0.0, 0.30, 0.75)     # shoreward array [P4,P5,P6]: X45=0.30, X56=0.45
 
 
 def synthetic_regular(fs, duration, h, gpos, Tp, a_i, a_r, seed=11):
@@ -94,7 +100,7 @@ def main():
     h_reg = 0.35
     for name, cols, gpos, side in [
         ("Regular wave -- array 1", [0, 1, 2], ARR1_REG, "seaward"),
-        ("Regular wave -- array 2", [5, 4, 3], ARR2_REG, "shoreward"),
+        ("Regular wave -- array 2", [3, 4, 5], ARR2_REG, "shoreward"),
     ]:
         r = run(eta6[:, cols], h_reg, gpos)
         rows.append({
@@ -111,7 +117,7 @@ def main():
     h_jon = 0.50
     for name, cols, gpos, side in [
         ("JONSWAP -- array 1", [0, 1, 2], ARR1_JON, "seaward"),
-        ("JONSWAP -- array 2", [5, 4, 3], ARR2_JON, "shoreward"),
+        ("JONSWAP -- array 2", [3, 4, 5], ARR2_JON, "shoreward"),
     ]:
         r = run(eta6[:, cols], h_jon, gpos)
         rows.append({
