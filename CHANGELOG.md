@@ -7,6 +7,25 @@ All notable changes to WaveLabX are recorded here. The format is based on
 ## [0.3.0] - 2026-05-22
 
 ### Added
+- The browser application now auto-detects the number of channels in each
+  uploaded CSV and dispatches to the appropriate routine:
+  2-column files run two-probe Goda-Suzuki on the single pair, 3-column
+  files run the single-array three-probe routine with automatic two-probe
+  fallback, and 6-column files keep the existing dual-array behaviour.
+  A per-record layout tag (2-probe / 3-probe) appears next to the file
+  name in the results table.
+- An "Analysis method" dropdown in the Settings panel lets users override
+  the automatic method selection: "Auto", "Three-probe only",
+  "Two-probe (best admissible pair)" or one of "Two-probe (gauges 1-2 /
+  1-3 / 2-3)" to force a specific pair. Intended for explicit two-probe
+  validation against the manuscript results.
+- A "Validation cookbook" section in `README.md` showing equivalent
+  Python and browser snippets for the four most common cases (2-probe,
+  3-probe, 6-channel, and forced-pair two-probe).
+- A small info-tip next to the "Wave type" toggle clarifying that the
+  Regular / Irregular toggle is display-only -- both modes call the same
+  spectral routine.
+
 - High-level `reflectionAnalysis()` in `web/spectral.js`, a JavaScript
   mirror of Python's `wavelabx.analysis.reflection_analysis`. It runs the
   redundant three-probe routine, evaluates the three two-probe pairs, and

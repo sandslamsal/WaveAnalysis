@@ -79,6 +79,76 @@ two-probe fallback. The badge is also written to the exported CSV
 cross-check `twoProbeGoda`, `threeProbeArray` and `reflectionAnalysis`
 against their Python counterparts.
 
+## Validation cookbook
+
+The Python package and the browser application expose the same primitives.
+Use these snippets to verify our results, or to run the same analysis on
+your own data.
+
+**1. You only have two-probe data.**
+
+```python
+import numpy as np
+from wavelabx import two_probe_goda
+
+eta12 = np.loadtxt("my_two_probe_record.csv", delimiter=",", skiprows=1)
+r = two_probe_goda(eta12, fs=100.0, h=0.50, gpos=(0.0, 0.45))
+print(r["Hi"], r["Hr"], r["Kr"], r["retained_energy_fraction"])
+```
+
+The same record (2-column CSV) can be dropped into
+[the browser application](https://wave-lab-x.vercel.app) directly — the
+two-probe routine is detected automatically from the column count, and the
+"2P" badge in the results table confirms it.
+
+**2. You have a three-probe array.**
+
+```python
+from wavelabx import reflection_analysis
+
+eta = np.loadtxt("my_three_probe.csv", delimiter=",", skiprows=1)
+out = reflection_analysis(eta, fs=100.0, h=0.50, gpos=(0.0, 0.45, 0.75))
+print(out["method_used"], out[out["method_used"]]["Kr"])
+```
+
+`reflection_analysis` runs the three-probe routine, evaluates all
+two-probe pairs and selects three-probe when its retained-energy
+fraction is at least 80%; otherwise it falls back to the best admissible
+two-probe pair. Drop the same 3-column CSV in the browser tool: same
+logic, same numbers, with a "3P" or "2P" badge showing which method was
+chosen.
+
+**3. You have a six-channel record (two three-probe arrays).**
+
+```python
+from wavelabx import three_probe_array
+
+eta = np.loadtxt("data/jonswap_example.csv", delimiter=",", skiprows=1)
+seaward  = three_probe_array(eta[:, 0:3], fs=100.0, h=0.50, gpos=(0.0, 0.45, 0.75))
+shoreward = three_probe_array(eta[:, 3:6], fs=100.0, h=0.50, gpos=(0.0, 0.30, 0.75))
+print(seaward["Hi"], seaward["Hr"], seaward["Kr"])
+```
+
+Drop the same 6-column CSV in the browser tool with matching spacings
+to reproduce the values in Table&nbsp;2 of the manuscript.
+
+**4. You want to force two-probe on a specific pair (e.g., to cross-check
+the paper with a different method).**
+
+In Python:
+
+```python
+from wavelabx import two_probe_goda
+eta = np.loadtxt("data/jonswap_example.csv", delimiter=",", skiprows=1)
+# Force two-probe Goda-Suzuki using gauges 1 and 3 only.
+r = two_probe_goda(eta[:, [0, 2]], fs=100.0, h=0.50, gpos=(0.0, 0.75))
+print(r["Hi"], r["Hr"], r["Kr"])
+```
+
+In the browser, select **Analysis method &rarr; Two-probe (gauges 1-3)**
+from the settings dropdown and drop the same file. Both produce the
+same numbers.
+
 ## Browser tool
 
 **Live demo:** [wave-lab-x.vercel.app](https://wave-lab-x.vercel.app)

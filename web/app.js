@@ -108,23 +108,34 @@ function detectFrequency(columns, fs, fmin, fmax) {
  * ------------------------------------------------------------------------- */
 
 /* ---------------------------------------------------------------------------
- * CSV parsing — 6 numeric columns, optional header row.
+ * CSV parsing — accept 2, 3 or 6 numeric columns, optional header row.
+ * The number of columns determines the analysis layout:
+ *   2 columns  -> one probe pair (two-probe Goda-Suzuki)
+ *   3 columns  -> one three-probe array (reflectionAnalysis with auto fallback)
+ *   6 columns  -> two three-probe arrays (current default)
+ * Records with other column counts are clipped to the nearest supported layout.
  * ------------------------------------------------------------------------- */
 function parseCSV(text) {
   const lines = text.split(/\r?\n/);
-  const cols = [[], [], [], [], [], []];
-  let started = false;
+  let nCols = null;
+  const cols = [];
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li].trim();
     if (!line) continue;
     const parts = line.split(/[,;\t]/);
-    if (parts.length < 6) continue;
-    const vals = parts.slice(0, 6).map((p) => parseFloat(p));
-    if (vals.some((v) => Number.isNaN(v))) { continue; } // header / junk
-    started = true;
-    for (let c = 0; c < 6; c++) cols[c].push(vals[c]);
+    if (parts.length < 2) continue;
+    const vals = parts.map((p) => parseFloat(p));
+    if (vals.some((v) => Number.isNaN(v))) continue;   // header / junk row
+    if (nCols === null) {
+      // Determine layout from the first numeric row.
+      const n = vals.length;
+      nCols = n >= 6 ? 6 : n >= 3 ? 3 : n >= 2 ? 2 : 0;
+      if (!nCols) return null;
+      for (let c = 0; c < nCols; c++) cols.push([]);
+    }
+    for (let c = 0; c < nCols; c++) cols[c].push(vals[c]);
   }
-  return started ? cols : null;
+  return cols.length ? cols : null;
 }
 
 /* Water depth from file name (frequency is detected from the signal). */
@@ -146,7 +157,7 @@ function getSettings() {
   const fmax = parseFloat($("fmax").value) || 2.0;
   const depth = parseFloat($("depth").value) || 0.25;
   // Each array is defined by two spacings (X12, X23); gauge positions
-  // are 0, X12, X12+X23.
+  // are 0, X12, X12+X23. For 2-probe data only the first spacing is used.
   const spacings = (cls) => {
     const s = [...document.querySelectorAll(cls)]
       .sort((a, b) => a.dataset.i - b.dataset.i)
@@ -157,7 +168,11 @@ function getSettings() {
   const pos2 = spacings(".sp2");
   const skipWaves = Math.max(0, parseInt($("skipWaves").value, 10) || 0);
   const numWaves = Math.max(0, parseInt($("numWaves").value, 10) || 0);
-  return { fs, fmin, fmax, depth, skipWaves, numWaves, pos1, pos2 };
+  // Method override (Tier 2): "auto" | "3p_only" | "2p_best" |
+  //   "2p_1_2" | "2p_1_3" | "2p_2_3"
+  const methSel = $("methodOverride");
+  const method = methSel && methSel.value ? methSel.value : "auto";
+  return { fs, fmin, fmax, depth, skipWaves, numWaves, pos1, pos2, method };
 }
 
 /* Current wave-type mode: "regular" or "irregular". */
@@ -173,10 +188,14 @@ function analyzeRecord(rec, redetect) {
   const mode = getMode();
 
   if (!rec.cols || rec.cols[0].length < 16) {
-    rec.error = "Not a valid 6-column time series";
+    rec.error = "Not a valid time series (need >= 16 samples)";
     rec.result = null;
     return;
   }
+
+  // Layout: "single2" (2 probes), "single3" (1 array of 3), "dual6" (2 arrays).
+  const nCols = rec.cols.length;
+  rec.layout = nCols === 2 ? "single2" : nCols === 3 ? "single3" : "dual6";
 
   if (!(rec.depth > 0)) {
     rec.error = "Set water depth";
@@ -190,6 +209,32 @@ function analyzeRecord(rec, redetect) {
     rec.result = null;
     return;
   }
+
+  // Helper: run the chosen method on one array (returns same shape as
+  // reflectionAnalysis: { Hi, Hr, Kr, retained, method_used, ... }).
+  const runArray = (cols3, pos3) => {
+    const meth = s.method;
+    if (meth === "3p_only") {
+      const r = SP.threeProbeArray(cols3, s.fs, rec.depth, pos3);
+      r.method_used = "three_probe";
+      return r;
+    }
+    if (meth === "2p_best") {
+      const r = SP.reflectionAnalysis(cols3, s.fs, rec.depth, pos3,
+                                      { preferThreeProbe: false });
+      return r;
+    }
+    if (meth === "2p_1_2" || meth === "2p_1_3" || meth === "2p_2_3") {
+      const map = { "2p_1_2": [0, 1], "2p_1_3": [0, 2], "2p_2_3": [1, 2] };
+      const [i, j] = map[meth];
+      const r = SP.twoProbeGoda(cols3[i], cols3[j], s.fs, rec.depth, pos3[i], pos3[j]);
+      r.method_used = "two_probe";
+      r.pair = [i + 1, j + 1];
+      return r;
+    }
+    // "auto" (default)
+    return SP.reflectionAnalysis(cols3, s.fs, rec.depth, pos3);
+  };
 
   // Regular mode supports an optional analysis window (skip-N-waves /
   // use-N-waves), which slices the record before the spectral routine runs.
@@ -220,42 +265,60 @@ function analyzeRecord(rec, redetect) {
   }
 
   try {
-    // Same routine for both regular and irregular modes: a high-level call
-    // that runs the three-probe routine, evaluates all two-probe pairs, and
-    // selects the three-probe result when it retains >= 80% of the spectral
-    // energy; otherwise falls back to the best admissible two-probe pair.
-    // This matches the Python wavelabx.analysis.reflection_analysis pipeline.
-    const a1 = SP.reflectionAnalysis(cols.slice(0, 3), s.fs, rec.depth, s.pos1);
-    const a2 = SP.reflectionAnalysis(cols.slice(3, 6), s.fs, rec.depth, s.pos2);
+    // Dispatch by record layout. Single-array records (2 or 3 columns) are
+    // analysed once; the dual-array case (6 columns) is analysed twice with
+    // the same routine. All branches use the Python-parity routines exposed
+    // by web/spectral.js.
+    let a1, a2;
+    if (rec.layout === "single2") {
+      // Two-probe Goda-Suzuki on the (only) pair. Method override is ignored
+      // here because only twoProbeGoda makes sense for two-channel data.
+      a1 = SP.twoProbeGoda(cols[0], cols[1], s.fs, rec.depth,
+                           s.pos1[0], s.pos1[1]);
+      a1.method_used = "two_probe";
+      a2 = null;
+    } else if (rec.layout === "single3") {
+      a1 = runArray(cols, s.pos1);
+      a2 = null;
+    } else {
+      // dual6 (default)
+      a1 = runArray(cols.slice(0, 3), s.pos1);
+      a2 = runArray(cols.slice(3, 6), s.pos2);
+    }
 
-    // Peak frequency / period
-    if (mode === "irregular") rec.freq = a1.fp || rec.freq;
-    const period = (a1.Tp != null && Number.isFinite(a1.Tp)) ? a1.Tp
+    // Peak frequency / period (a1.fp is set by reflectionAnalysis/threeProbeArray)
+    if (mode === "irregular") rec.freq = (a1 && a1.fp) || rec.freq;
+    const period = (a1 && a1.Tp != null && Number.isFinite(a1.Tp)) ? a1.Tp
       : (rec.freq > 0 ? 1 / rec.freq : NaN);
 
     // Goda spacing diagnostic for the current dominant frequency
     const L = (rec.freq > 0) ? wavelength(rec.freq, rec.depth) : NaN;
-    const dl1 = Number.isFinite(L) && L > 0
-      ? (Math.max(...s.pos1) - Math.min(...s.pos1)) / L : NaN;
-    const dl2 = Number.isFinite(L) && L > 0
-      ? (Math.max(...s.pos2) - Math.min(...s.pos2)) / L : NaN;
+    const span = (p) => (Math.max(...p) - Math.min(...p));
+    const dl1 = Number.isFinite(L) && L > 0 ? span(s.pos1) / L : NaN;
+    const dl2 = (rec.layout === "dual6" && Number.isFinite(L) && L > 0)
+      ? span(s.pos2) / L : NaN;
 
     // Whether a two-probe fallback was selected for either array.
-    const fallback1 = a1.method_used === "two_probe";
-    const fallback2 = a2.method_used === "two_probe";
-    const ret = Math.min(a1.retained, a2.retained);
+    const fallback1 = a1 && a1.method_used === "two_probe";
+    const fallback2 = a2 && a2.method_used === "two_probe";
+    const r1 = (a1 && Number.isFinite(a1.retained)) ? a1.retained : NaN;
+    const r2 = (a2 && Number.isFinite(a2.retained)) ? a2.retained : NaN;
+    const ret = a2 ? Math.min(r1, r2) : r1;
 
     rec.result = {
-      Hi1: a1.Hi, Hr1: a1.Hr, Kr1: a1.Kr,
-      Hi2: a2.Hi, Hr2: a2.Hr, Kr2: a2.Kr,
-      Kt: a1.Hi > 0 ? a2.Hi / a1.Hi : NaN,
+      layout: rec.layout,
+      Hi1: a1 ? a1.Hi : null, Hr1: a1 ? a1.Hr : null, Kr1: a1 ? a1.Kr : null,
+      Hi2: a2 ? a2.Hi : null, Hr2: a2 ? a2.Hr : null, Kr2: a2 ? a2.Kr : null,
+      Kt: (a1 && a2 && a1.Hi > 0) ? a2.Hi / a1.Hi : null,
       period,
-      method1: a1.method_used, method2: a2.method_used,
+      method1: a1 ? a1.method_used : null,
+      method2: a2 ? a2.method_used : null,
       fallback: fallback1 || fallback2,
       L, dl1, dl2,
-      ratioWarn: Number.isFinite(dl1) && Number.isFinite(dl2)
-        && (dl1 < DL_MIN || dl1 > DL_MAX || dl2 < DL_MIN || dl2 > DL_MAX),
-      retained: ret, retainedWarn: !(ret >= 0.8),
+      ratioWarn:
+        (Number.isFinite(dl1) && (dl1 < DL_MIN || dl1 > DL_MAX)) ||
+        (Number.isFinite(dl2) && (dl2 < DL_MIN || dl2 > DL_MAX)),
+      retained: ret, retainedWarn: Number.isFinite(ret) && !(ret >= 0.8),
       spectral: mode === "irregular",
     };
   } catch (e) {
@@ -309,14 +372,21 @@ function renderTable() {
       const warnRow = r.fallback || r.ratioWarn || r.retainedWarn;
       const cls = warnRow ? ' class="fallback"' : "";
       const flag = warnRow ? " &#9888;" : "";
-      // Per-array method indicator: 3P (three-probe) or 2P (two-probe fallback).
-      const badge = (m) => m === "two_probe"
-        ? '<span class="meth-2p" title="Two-probe fallback (three-probe inversion ill-conditioned)">2P</span>'
-        : '<span class="meth-3p" title="Three-probe redundant array">3P</span>';
+      // Per-array method indicator: 3P (three-probe) or 2P (two-probe Goda).
+      // For single-array records (2 or 3 channels) the second array is empty.
+      const badge = (m) => {
+        if (m == null) return "";
+        return m === "two_probe"
+          ? '<span class="meth-2p" title="Two-probe Goda-Suzuki">2P</span>'
+          : '<span class="meth-3p" title="Three-probe redundant array">3P</span>';
+      };
       const m1 = badge(r.method1);
       const m2 = badge(r.method2);
+      const layoutTag = r.layout === "single2" ? ' <span class="lay-tag">2-probe</span>'
+        : r.layout === "single3" ? ' <span class="lay-tag">3-probe</span>'
+        : "";
       tr.innerHTML = `
-        <td title="${rec.name}">${rec.name}${flag}</td>
+        <td title="${rec.name}">${rec.name}${flag}${layoutTag}</td>
         ${depthCell}${freqCell}
         <td>${fmt(r.period, 3)}</td>
         <td${cls}>${fmt(r.Hi1)} ${m1}</td>

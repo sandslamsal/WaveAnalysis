@@ -246,6 +246,33 @@ td.fallback { color: var(--warn); }
 .meth-3p { color: #1f5fa6; background: #e6efff; border: 1px solid #c9dcff; }
 .meth-2p { color: #b65300; background: #fff1df; border: 1px solid #ffd8a8; }
 
+/* Small info badge ("ⓘ") used next to labels to expose a tooltip without
+   adding more text to the visible UI. */
+.info-tip {
+  display: inline-block;
+  margin-left: 4px;
+  color: #777;
+  font-size: 0.9em;
+  cursor: help;
+}
+.info-tip:hover, .info-tip:focus { color: #1f5fa6; outline: none; }
+
+/* Per-record layout tag shown next to the file name when the CSV is
+   2-channel ("2-probe") or 3-channel ("3-probe"); the dual-array case
+   ("6-channel, two 3-probe arrays") shows no tag. */
+.lay-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #444;
+  background: #f0f0f0;
+  border: 1px solid #d0d0d0;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
 .row-del {
   border: none;
   background: none;
