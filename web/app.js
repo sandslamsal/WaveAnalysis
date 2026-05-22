@@ -1376,9 +1376,10 @@ function applyMode() {
   const note = $("modeNote");
   if (note) {
     note.innerHTML = irregular
-      ? "Spectral method — incident/reflected separated at every frequency bin; "
-        + "H<sub>i</sub>, H<sub>r</sub> are H<sub>m0</sub> significant wave heights."
-      : "Single-frequency method — separation at the detected dominant wave frequency.";
+      ? "Display only. Reports H<sub>i</sub>, H<sub>r</sub> as spectral H<sub>m0</sub>"
+        + " from the full record, with peak frequency f<sub>p</sub> and period T<sub>p</sub>."
+      : "Display only. Shows the dominant frequency f (editable) and enables the"
+        + " skip-N-waves / analyse-N-waves record window. Same analysis routine in both modes.";
   }
   // relabel the f / T column headers for the active mode
   const thF = $("th-f"), thT = $("th-T");
