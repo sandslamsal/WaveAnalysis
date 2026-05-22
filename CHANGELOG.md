@@ -6,6 +6,16 @@ All notable changes to WaveLabX are recorded here. The format is based on
 
 ## [0.3.0] - 2026-05-22
 
+### Removed
+- Regular / Irregular wave-type toggle in the browser application. With
+  both modes now routing through the same `reflectionAnalysis` routine,
+  the toggle controlled only display labels and the visibility of the
+  skip-/use-N-waves window. The toggle has been removed and the
+  Regular-style settings (auto-detected dominant frequency, editable
+  f cell, record window) are now always available. The `getMode`,
+  `applyMode` and "wavemode" radio listener have been deleted from
+  `web/app.js`.
+
 ### Added
 - The browser application now auto-detects the number of channels in each
   uploaded CSV and dispatches to the appropriate routine:

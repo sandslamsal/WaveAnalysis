@@ -175,17 +175,10 @@ function getSettings() {
   return { fs, fmin, fmax, depth, skipWaves, numWaves, pos1, pos2, method };
 }
 
-/* Current wave-type mode: "regular" or "irregular". */
-function getMode() {
-  const r = document.querySelector('input[name="wavemode"]:checked');
-  return r ? r.value : "regular";
-}
-
-/* Analyse one record. redetect = re-run frequency detection (regular mode). */
+/* Analyse one record. redetect = re-run frequency detection. */
 function analyzeRecord(rec, redetect) {
   rec.error = null;
   const s = getSettings();
-  const mode = getMode();
 
   if (!rec.cols || rec.cols[0].length < 16) {
     rec.error = "Not a valid time series (need >= 16 samples)";
@@ -242,26 +235,25 @@ function analyzeRecord(rec, redetect) {
   // peak frequency.
   let cols = rec.cols;
   rec.windowInfo = null;
-  if (mode === "regular") {
-    if (redetect && !rec.freqManual) {
-      const f = detectFrequency(rec.cols.slice(0, 3), s.fs, s.fmin, s.fmax);
-      if (f) rec.freq = f;
+  if (redetect && !rec.freqManual) {
+    const f = detectFrequency(rec.cols.slice(0, Math.min(3, rec.cols.length)),
+                              s.fs, s.fmin, s.fmax);
+    if (f) rec.freq = f;
+  }
+  if ((s.skipWaves > 0 || s.numWaves > 0) && rec.freq > 0) {
+    const N = rec.cols[0].length;
+    const spw = s.fs / rec.freq;                 // samples per wave
+    let start = Math.round(s.skipWaves * spw);
+    let len = s.numWaves > 0 ? Math.round(s.numWaves * spw) : N - start;
+    start = Math.min(Math.max(start, 0), N);
+    len = Math.min(Math.max(len, 0), N - start);
+    if (len < 16) {
+      rec.error = "Analysis window too short - reduce skip or increase waves";
+      rec.result = null;
+      return;
     }
-    if ((s.skipWaves > 0 || s.numWaves > 0) && rec.freq > 0) {
-      const N = rec.cols[0].length;
-      const spw = s.fs / rec.freq;                 // samples per wave
-      let start = Math.round(s.skipWaves * spw);
-      let len = s.numWaves > 0 ? Math.round(s.numWaves * spw) : N - start;
-      start = Math.min(Math.max(start, 0), N);
-      len = Math.min(Math.max(len, 0), N - start);
-      if (len < 16) {
-        rec.error = "Analysis window too short - reduce skip or increase waves";
-        rec.result = null;
-        return;
-      }
-      cols = rec.cols.map((c) => c.slice(start, start + len));
-      rec.windowInfo = { start, len, waves: len / spw };
-    }
+    cols = rec.cols.map((c) => c.slice(start, start + len));
+    rec.windowInfo = { start, len, waves: len / spw };
   }
 
   try {
@@ -286,8 +278,10 @@ function analyzeRecord(rec, redetect) {
       a2 = runArray(cols.slice(3, 6), s.pos2);
     }
 
-    // Peak frequency / period (a1.fp is set by reflectionAnalysis/threeProbeArray)
-    if (mode === "irregular") rec.freq = (a1 && a1.fp) || rec.freq;
+    // Peak frequency / period: prefer the spectral peak from the analysis
+    // when the user has not manually edited f; fall back to the detected
+    // frequency for the period otherwise.
+    if (!rec.freqManual && a1 && a1.fp) rec.freq = a1.fp;
     const period = (a1 && a1.Tp != null && Number.isFinite(a1.Tp)) ? a1.Tp
       : (rec.freq > 0 ? 1 / rec.freq : NaN);
 
@@ -319,7 +313,7 @@ function analyzeRecord(rec, redetect) {
         (Number.isFinite(dl1) && (dl1 < DL_MIN || dl1 > DL_MAX)) ||
         (Number.isFinite(dl2) && (dl2 < DL_MIN || dl2 > DL_MAX)),
       retained: ret, retainedWarn: Number.isFinite(ret) && !(ret >= 0.8),
-      spectral: mode === "irregular",
+      spectral: true,
     };
   } catch (e) {
     rec.error = "Computation failed: " + e.message;
@@ -341,7 +335,6 @@ const fmt = (x, p = 4) =>
 function renderTable() {
   const body = $("resultsBody");
   body.innerHTML = "";
-  const irregular = getMode() === "irregular";
   let anyFallback = false, anyRatio = false, anyRetained = false;
 
   state.records.forEach((rec) => {
@@ -355,10 +348,10 @@ function renderTable() {
         <input type="number" step="0.01" min="0" value="${rec.depth ?? ""}"
                data-id="${rec.id}" data-field="depth" /></td>`;
     const freqVal = rec.freq != null ? rec.freq.toFixed(3) : "";
-    // frequency is user-editable in regular mode; derived (peak) in irregular
-    const freqCell = irregular
-      ? `<td>${freqVal || "&mdash;"}</td>`
-      : `<td class="editable">
+    // f is always editable: the user can override the auto-detected dominant
+    // frequency, which is used for the skip-/use-N-waves windowing and for
+    // the period column. The reflectionAnalysis output is independent of f.
+    const freqCell = `<td class="editable">
         <input type="number" step="0.001" min="0" value="${freqVal}"
                data-id="${rec.id}" data-field="freq" /></td>`;
 
@@ -1273,14 +1266,6 @@ function init() {
     })
   );
 
-  // wave-type toggle -> adapt the UI and recompute everything
-  document.querySelectorAll('input[name="wavemode"]').forEach((el) =>
-    el.addEventListener("change", () => {
-      applyMode();
-      if (state.records.length) analyzeAll(true);
-    })
-  );
-
   // visualization controls
   $("vizFile").addEventListener("change", () => {
     vizView = null; vizYView = null; vizPins = []; vizHoverPt = null;
@@ -1343,7 +1328,6 @@ function init() {
     if ($("vizBox").open) drawViz();
   });
 
-  applyMode();
   applyVizType();
   updateSpacingReadout();
 }
@@ -1366,26 +1350,10 @@ function applyVizType() {
       t === "spectrum" || t === "power" ? "flex" : "none";
 }
 
-/* Show/hide regular-only settings and update the mode note + table headers. */
-function applyMode() {
-  const irregular = getMode() === "irregular";
-  ["fld-fmin", "fld-fmax", "fld-skip", "fld-num"].forEach((id) => {
-    const el = $(id);
-    if (el) el.style.display = irregular ? "none" : "";
-  });
-  const note = $("modeNote");
-  if (note) {
-    note.innerHTML = irregular
-      ? "Display only. Reports H<sub>i</sub>, H<sub>r</sub> as spectral H<sub>m0</sub>"
-        + " from the full record, with peak frequency f<sub>p</sub> and period T<sub>p</sub>."
-      : "Display only. Shows the dominant frequency f (editable) and enables the"
-        + " skip-N-waves / analyse-N-waves record window. Same analysis routine in both modes.";
-  }
-  // relabel the f / T column headers for the active mode
-  const thF = $("th-f"), thT = $("th-T");
-  if (thF) thF.innerHTML = irregular ? "<i>f</i><sub>p</sub> (Hz)" : "<i>f</i> (Hz)";
-  if (thT) thT.innerHTML = irregular ? "<i>T</i><sub>p</sub> (s)" : "<i>T</i> (s)";
-}
+/* Wave-type mode toggle removed in v0.3.0 -- the application now uses a
+ * single set of settings (f detection band, skip-N-waves window, editable
+ * f column) for every record. The previous applyMode() helper, the
+ * getMode() function and the radio-button event listener are all gone. */
 
 if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", init);

@@ -84,22 +84,10 @@
       </div>
     </details>
 
-    <!-- ============ WAVE-TYPE TOGGLE ============ -->
-    <div class="mode-toggle" id="modeToggle">
-      <span class="mode-title">Wave type
-        <span class="info-tip" tabindex="0"
-          title="Display only. Both modes use the same spectral routine (reflectionAnalysis). The toggle changes how the dominant frequency / period is shown and whether the skip-N-waves window appears.">&#9432;</span>
-      </span>
-      <label class="mode-opt">
-        <input type="radio" name="wavemode" value="regular" checked />
-        <span>Regular</span>
-      </label>
-      <label class="mode-opt">
-        <input type="radio" name="wavemode" value="irregular" />
-        <span>Irregular</span>
-      </label>
-      <span class="mode-note" id="modeNote"></span>
-    </div>
+    <!-- Wave-type toggle removed (v0.3.0): regular and irregular records now
+         go through the same routine (reflectionAnalysis). The detected
+         dominant frequency f (editable) and the optional skip-N-waves /
+         analyse-N-waves record window are available for every file. -->
 
     <!-- ============ SETTINGS ============ -->
     <section class="card compact" id="settings">

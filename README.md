@@ -68,16 +68,18 @@ JavaScript entry points (`web/spectral.js`):
 - `reflectionAnalysis(cols, fs, h, pos)` — mirror of `reflection_analysis`;
   same method-selection logic, same numbers.
 
-The browser UI (`web/index.html`) routes both Regular and Irregular wave
-modes through `reflectionAnalysis`. The toggle now controls only the UI
-(peak-frequency display, skip/use-waves window) — the analysis path itself is
-identical in both modes and matches the Python pipeline. Each row in the
+The browser UI (`web/index.html`) routes every uploaded file through the
+same routine, with the same settings (auto-detected dominant frequency `f`,
+editable in the table; an optional skip-N-waves / analyse-N-waves record
+window in the Settings panel). Use the **Analysis method** dropdown in
+Settings to override the automatic method selection ("Auto", "Three-probe
+only", or "Two-probe (best pair / 1-2 / 1-3 / 2-3)"). Each row in the
 results table carries a small "3P" or "2P" badge per array, indicating
-whether the row used the three-probe redundant average or the best
-two-probe fallback. The badge is also written to the exported CSV
-(`Method1`, `Method2` columns). The JS↔Python parity tests in the suite
-cross-check `twoProbeGoda`, `threeProbeArray` and `reflectionAnalysis`
-against their Python counterparts.
+whether the row used the three-probe redundant average or a two-probe
+result. The badge is also written to the exported CSV (`Method1`,
+`Method2` columns). The JS↔Python parity tests in the suite cross-check
+`twoProbeGoda`, `threeProbeArray` and `reflectionAnalysis` against their
+Python counterparts.
 
 ## Validation cookbook
 
