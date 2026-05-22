@@ -91,12 +91,13 @@
           file (channels&nbsp;1&ndash;3 seaward, channels&nbsp;4&ndash;6
           shoreward). Water depth is set below and may be overridden per
           file (auto-read from "Depth=<i>d</i>" in the file name when
-          present). The Python entry points
-          <code>two_probe_goda</code>, <code>three_probe_array</code> and
-          <code>reflection_analysis</code> in the WaveLabX package match
-          this tool's outputs to a few parts in 1000, verified by
-          automated JavaScript&harr;Python cross-checks in the test
-          suite.
+          present). The browser tool calls the same per-frequency
+          Goda&ndash;Suzuki routines as the Python WaveLabX package
+          (<code>two_probe_goda</code>, <code>three_probe_array</code>
+          and <code>reflection_analysis</code>); an automated
+          cross-implementation test in the WaveLabX test suite confirms
+          that the two interfaces produce numerically equivalent results
+          on identical inputs.
         </p>
       </div>
     </details>
