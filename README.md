@@ -1,6 +1,6 @@
 # WaveLabX
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20217994.svg)](https://doi.org/10.5281/zenodo.20217994)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20347447.svg)](https://doi.org/10.5281/zenodo.20347447)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 WaveLabX is an open-source toolkit for laboratory wave-probe analysis. It
@@ -205,7 +205,7 @@ release:
 
 > Lamsal, S., Deveaux Garrido, C., Haus, B. K., & Rhode-Barbarigos, L.
 > (2026). *WaveLabX* (v0.3.1) [Software]. Zenodo.
-> [https://doi.org/10.5281/zenodo.20217994](https://doi.org/10.5281/zenodo.20217994)
+> [https://doi.org/10.5281/zenodo.20347447](https://doi.org/10.5281/zenodo.20347447)
 
 BibTeX:
 
@@ -216,7 +216,7 @@ BibTeX:
   title     = {WaveLabX},
   version   = {0.3.1},
   year      = {2026},
-  doi       = {10.5281/zenodo.20217994},
+  doi       = {10.5281/zenodo.20347447},
   url       = {https://github.com/sandslamsal/WaveLabX},
   publisher = {Zenodo}
 }

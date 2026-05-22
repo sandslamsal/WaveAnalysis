@@ -160,7 +160,7 @@ All notable changes to WaveLabX are recorded here. The format is based on
 - Retained-energy diagnostic and condition-number filtering.
 - Browser application (`web/`) with three-probe analysis, interactive
   spectra/time-series plots and CSV export.
-- Initial Zenodo archive (DOI 10.5281/zenodo.20217994).
+- Initial Zenodo archive (DOI 10.5281/zenodo.20347447).
 
 ### Changed
 - Refactored Python package into `core`, `stats`, `two_probe`,
