@@ -11,7 +11,7 @@ const DL_MIN = 0.05;       // valid spacing range  0.05 <= dl/L <= 0.45
 const DL_MAX = 0.45;
 // Displayed in the footer as "Last update". Update this string whenever a
 // user-visible change is shipped to main (Vercel auto-deploys from main).
-const LAST_UPDATE = "27 May 2026, 16:30 UTC";
+const LAST_UPDATE = "27 May 2026, 17:00 UTC";
 
 /* ---------------------------------------------------------------------------
  * Linear dispersion relation  omega^2 = g k tanh(k d)  -> wave number k
@@ -371,9 +371,17 @@ function analyzeRecord(rec, redetect) {
     const outOfBand1_m = godaAt(pp1, Lm);
     const outOfBand2_m = godaAt(pp2, Lm);
 
-    // Whether a two-probe fallback was selected for either array.
-    const fallback1 = a1 && a1.method_used === "two_probe";
-    const fallback2 = a2 && a2.method_used === "two_probe";
+    // Whether a two-probe fallback was selected for either array. A
+    // 2-channel record has no fallback path - two-probe is the only
+    // method - so the fallback flag must stay false there. Same for any
+    // array where the user explicitly forced a 2-probe method.
+    const isFallback = (arr) =>
+      arr && arr.method_used === "two_probe"
+      && rec.layout !== "single2"
+      && s.method !== "2p_best"
+      && s.method !== "2p_1_2" && s.method !== "2p_1_3" && s.method !== "2p_2_3";
+    const fallback1 = isFallback(a1);
+    const fallback2 = isFallback(a2);
     const r1 = (a1 && Number.isFinite(a1.retained)) ? a1.retained : NaN;
     const r2 = (a2 && Number.isFinite(a2.retained)) ? a2.retained : NaN;
     const ret = a2 ? Math.min(r1, r2) : r1;
