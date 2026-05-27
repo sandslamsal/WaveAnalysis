@@ -98,8 +98,9 @@ Following:
 - **Global water depth** with one-click apply-to-all and per-file
   override.
 - **Configurable gauge spacings** for both probe arrays.
-- **Interactive visualisation** &mdash; time-series, energy-spectrum and
-  power-spectrum plots with zoom, pan and per-point readout.
+- **Interactive visualisation** &mdash; time-series, decomposed
+  incident/reflected and raw per-probe spectrum plots with zoom, pan and
+  per-point readout.
 - Runs **entirely client-side**; no data leaves the browser.
 
 ## Running locally

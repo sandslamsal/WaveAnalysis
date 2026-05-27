@@ -11,7 +11,7 @@ const DL_MIN = 0.05;       // valid spacing range  0.05 <= dl/L <= 0.45
 const DL_MAX = 0.45;
 // Displayed in the footer as "Last update". Update this string whenever a
 // user-visible change is shipped to main (Vercel auto-deploys from main).
-const LAST_UPDATE = "27 May 2026, 17:00 UTC";
+const LAST_UPDATE = "27 May 2026, 20:00 UTC";
 
 /* ---------------------------------------------------------------------------
  * Linear dispersion relation  omega^2 = g k tanh(k d)  -> wave number k
@@ -586,7 +586,8 @@ function renderTable() {
 }
 
 /* ===========================================================================
- * VISUALIZATION — time-series and energy-spectrum plots (canvas)
+ * VISUALIZATION — time-series, decomposed-spectrum and raw per-probe
+ * spectrum plots (canvas)
  * ========================================================================= */
 const VIZ_COLORS = ["#1f5fa6", "#c0392b", "#1f7a4d", "#b9591a", "#6a4ca8", "#0e8a8a"];
 const VIZ_SPEC = { inc: "#1f5fa6", ref: "#c0392b", tra: "#1f7a4d" };
@@ -792,7 +793,7 @@ function buildSeriesPlot(rec) {
   };
 }
 
-/* Build an energy-spectrum plot object: incident/reflected from probes
+/* Build a decomposed-spectrum plot: incident/reflected from probes
  * 1-3, transmitted from probes 4-6, via the WaveLabX spectral method. */
 function buildSpectrumPlot(rec) {
   const SP = typeof WaveLabXSpectral !== "undefined" ? WaveLabXSpectral
@@ -858,7 +859,7 @@ function buildSpectrumPlot(rec) {
   };
 }
 
-/* Build a power-spectrum plot: the auto-spectrum (power spectral
+/* Build a raw per-probe spectrum plot: the auto-spectrum (power spectral
  * density) of each selected wave probe. */
 function buildPowerPlot(rec) {
   const SP = typeof WaveLabXSpectral !== "undefined" ? WaveLabXSpectral
@@ -906,11 +907,11 @@ function buildPowerPlot(rec) {
     yLabel: "Spectral density S(f)",
     yUnit: "m²·s",
     xMin: 0, xMax: fCap, series,
-    info: `${rec.name} — power spectral density per probe`,
+    info: `${rec.name} — raw per-probe spectral density (incident + reflected mixed)`,
   };
 }
 
-/* Draw the active plot (time series, energy spectrum, or power spectrum). */
+/* Draw the active plot (time series, decomposed spectrum, or raw per-probe spectrum). */
 function drawViz() {
   const canvas = $("vizCanvas");
   if (!canvas) return;
@@ -1646,7 +1647,7 @@ function init() {
 }
 
 /* Show the probe checkboxes for the time-series plot, or the
- * spectrum-curve checkboxes for the energy-spectrum plot — never both.
+ * spectrum-curve checkboxes for the decomposed-spectrum plot — never both.
  * (display is set inline because the .viz-probes class would otherwise
  * override the [hidden] attribute.) */
 function applyVizType() {

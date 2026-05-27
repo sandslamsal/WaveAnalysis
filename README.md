@@ -158,7 +158,7 @@ same numbers.
 `web/` contains a self-contained browser application. Drop one or more
 six-channel wave-gauge CSV files to get a table of incident/reflected wave
 heights and reflection coefficients for both probe arrays, plus interactive
-visualization (time-series, energy-spectrum and power-spectrum plots with
+visualization (time-series, decomposed incident/reflected and raw per-probe spectrum plots with
 zoom, pan and per-point readouts). It runs entirely client-side; no
 installation, no server, no data upload.
 
