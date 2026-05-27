@@ -54,22 +54,37 @@ def reflection_analysis(
     if len(gpos) != n_g:
         raise ValueError("gpos length must match number of columns in eta.")
 
-    # --- Zero-crossing on probe 1 for a representative period
+    # --- Zero-crossing on probe 1 for a representative time-domain period
     # zero_crossing returns (result_dict, names); only the dict is needed here.
     zc, _ = zero_crossing(eta[:, 0], fs)
     Hs = float(zc["Hs"])
     Tmean = float(zc["Tmean"])
-    Lp = float(compute_wavelength(h, Tmean))
+    # Wavelength at the zero-crossing mean period (linear dispersion).
+    Lm = float(compute_wavelength(h, Tmean)) if Tmean > 0 else float("nan")
 
-    out = {"Hs": Hs, "Tmean": Tmean, "Lp": Lp, "zero_crossing": zc}
+    # NOTE: 'Lp' is kept here as an alias of Lm for backward compatibility
+    # with older callers. The proper spectral-peak Lp (computed from Tp of
+    # the chosen reflection routine) is added below as 'Lp_spec'.
+    out = {
+        "Hs": Hs,
+        "Tmean": Tmean,
+        "Tm": Tmean,
+        "Lm": Lm,
+        "Lp": Lm,           # legacy alias (= Lm)
+        "zero_crossing": zc,
+    }
 
     # --- Candidate two-probe pairs (evaluate all)
+    # The displayed dx/Lp diagnostic uses Lm (linear wavelength at the
+    # zero-crossing mean period) as the representative scalar; the per-bin
+    # admissibility mask inside two_probe_goda itself is independent of
+    # this single number and runs against the full spectrum.
     two_probe_results: list[dict] = []
-    if n_g >= 2 and Lp > 0:
+    if n_g >= 2 and Lm > 0:
         for i in range(n_g):
             for j in range(i + 1, n_g):
                 dx = abs(gpos[j] - gpos[i])
-                r = dx / Lp
+                r = dx / Lm
                 tp = two_probe_goda(
                     eta[:, [i, j]],
                     fs=fs,
@@ -138,5 +153,19 @@ def reflection_analysis(
 
     else:
         out["method_used"] = "two_probe" if out.get("two_probe_best") is not None else "none"
+
+    # --- Spectral-peak summary (Tp / fp / Lp_spec) from the chosen routine.
+    Tp_val = float("nan"); fp_val = float("nan"); Lp_spec = float("nan")
+    if out.get("method_used") == "three_probe" and "three_probe" in out:
+        Tp_val = float(out["three_probe"].get("Tp", float("nan")))
+        fp_val = float(out["three_probe"].get("fp", float("nan")))
+    elif out.get("two_probe_best") is not None:
+        Tp_val = float(out["two_probe_best"].get("Tp", float("nan")))
+        fp_val = float(out["two_probe_best"].get("fp", float("nan")))
+    if Tp_val == Tp_val and Tp_val > 0:
+        Lp_spec = float(compute_wavelength(h, Tp_val))
+    out["Tp"] = Tp_val
+    out["fp"] = fp_val
+    out["Lp_spec"] = Lp_spec
 
     return out

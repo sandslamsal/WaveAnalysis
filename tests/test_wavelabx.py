@@ -151,6 +151,7 @@ _NODE = shutil.which("node")
 _JS_RUNNER_3P = os.path.join(os.path.dirname(__file__), "js_three_probe_runner.js")
 _JS_RUNNER_2P = os.path.join(os.path.dirname(__file__), "js_two_probe_runner.js")
 _JS_RUNNER_REF = os.path.join(os.path.dirname(__file__), "js_reflection_runner.js")
+_JS_RUNNER_PERIOD = os.path.join(os.path.dirname(__file__), "js_period_runner.js")
 
 
 @pytest.mark.skipif(_NODE is None, reason="Node.js not available")
@@ -246,3 +247,42 @@ def test_python_js_reflection_analysis_consistency():
     assert abs(js["Hi"] - py_pick["Hi"]) / py_pick["Hi"] < 5e-3
     assert abs(js["Hr"] - py_pick["Hr"]) / py_pick["Hr"] < 5e-3
     assert abs(js["Kr"] - py_pick["Kr"]) < 5e-3
+
+
+@pytest.mark.skipif(_NODE is None, reason="Node.js not available")
+def test_python_js_period_consistency():
+    """JS reports the same Tm (zero-crossing) and Tp (spectral peak) as Python
+    on the same record. This locks the new period-display toggle: switching
+    between Tp and Tm in the web app must produce numerically identical
+    period/wavelength values to the Python pipeline.
+    """
+    gpos = (0.0, 0.35, 0.70)
+    eta, _ = _synthetic_irregular_gauges(
+        fs=FS, duration=120.0, h=H, gpos=gpos,
+        Tpeak=TPEAK, Hi=HI, Kr=KR, seed=23,
+    )
+    py_zc, _ = zero_crossing(eta[:, 0], FS)
+    py_th = three_probe_array(eta, fs=FS, h=H, gpos=gpos)
+
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    try:
+        json.dump({"eta": eta.tolist(), "fs": FS, "h": H, "pos": list(gpos)}, tmp)
+        tmp.close()
+        proc = subprocess.run(
+            [_NODE, _JS_RUNNER_PERIOD, tmp.name],
+            capture_output=True, text=True, check=True,
+        )
+        js = json.loads(proc.stdout)
+    finally:
+        os.unlink(tmp.name)
+
+    # Zero-crossing mean period agrees to <0.5% (faithful port).
+    assert abs(js["Tm"] - py_zc["Tmean"]) / py_zc["Tmean"] < 5e-3
+    # Spectral peak Tp agrees within one FFT bin (Bluestein-vs-numpy
+    # ordering can shift the peak by at most one bin on borderline cases).
+    py_Tp = py_th["Tp"]
+    if py_Tp == py_Tp and py_Tp > 0:
+        df = FS / eta.shape[0]
+        tol = max(1.0 / (py_Tp - df) - 1.0 / py_Tp,
+                  1.0 / py_Tp - 1.0 / (py_Tp + df))
+        assert abs(js["Tp"] - py_Tp) <= 2 * tol

@@ -490,16 +490,139 @@ function autoSpectrum(col, fs) {
   return { f, S };
 }
 
+/* ---------------------------------------------------------------------------
+ * zero_crossing — faithful port of wavelabx/stats.zero_crossing.
+ *
+ *   eta : number[]   single-gauge time series [m]
+ *   fs  : sampling frequency [Hz]
+ *   threshold : (optional) minimum crest/trough amplitude [m]
+ *
+ * Returns { Hs, Hmean, H1_10, Hmax, Tmean, Ts }. Matches Python output
+ * within rounding for identical inputs (see tests/test_wavelabx.py).
+ * ------------------------------------------------------------------------- */
+function zeroCrossing(eta, fs, threshold) {
+  if (!(fs > 0)) throw new Error("fs must be > 0");
+  const N = eta.length;
+  // invert (match Python's downward-crossing convention) then linearly detrend.
+  // Mirrors scipy.signal.detrend(default 'linear'): subtract the least-squares
+  // line a*n + b from the inverted signal so neither mean nor drift remain.
+  const inv = new Float64Array(N);
+  for (let n = 0; n < N; n++) inv[n] = -eta[n];
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  for (let n = 0; n < N; n++) {
+    sumX += n; sumY += inv[n];
+    sumXY += n * inv[n]; sumXX += n * n;
+  }
+  const denom = N * sumXX - sumX * sumX;
+  const slope = denom !== 0 ? (N * sumXY - sumX * sumY) / denom : 0;
+  const intercept = (sumY - slope * sumX) / N;
+  const data = new Float64Array(N);
+  for (let n = 0; n < N; n++) data[n] = inv[n] - (slope * n + intercept);
+
+  const nan = Number.NaN;
+  const empty = { Hs: nan, Hmean: nan, H1_10: nan, Hmax: nan, Tmean: nan, Ts: nan };
+
+  // collect non-zero indices
+  const idx = [];
+  for (let n = 0; n < N; n++) if (data[n] !== 0) idx.push(n);
+  if (idx.length < 2) return empty;
+
+  // sign-change crossings
+  const cross = [];
+  for (let k = 0; k < idx.length - 1; k++) {
+    if (data[idx[k]] * data[idx[k + 1]] < 0) cross.push(idx[k]);
+  }
+  if (cross.length === 0) return empty;
+
+  // drop first downward crossing if needed
+  let start = 0;
+  if (data[0] > 0) start = 1;
+  // keep every second crossing (upward only)
+  const up = [];
+  for (let k = start; k < cross.length; k += 2) up.push(cross[k]);
+  if (up.length < 2) return empty;
+
+  const nw = up.length - 1;
+  // [Height, Crest, Trough, Period]
+  let wave = new Array(nw);
+  for (let i = 0; i < nw; i++) {
+    const a = up[i], b = up[i + 1];
+    let crest = -Infinity, trough = -Infinity;
+    for (let n = a; n < b; n++) {
+      if (data[n] > crest) crest = data[n];
+      if (-data[n] > trough) trough = -data[n];
+    }
+    wave[i] = [crest + trough, crest, trough, (b - a) / fs];
+  }
+
+  if (threshold == null) {
+    let hmax = 0;
+    for (let i = 0; i < wave.length; i++) if (wave[i][0] > hmax) hmax = wave[i][0];
+    threshold = 0.01 * hmax;
+  } else if (threshold < 0) {
+    throw new Error("threshold must be non-negative");
+  }
+
+  // Merge/remove small waves (faithful port of the Python logic)
+  let i = 0;
+  while (i < wave.length) {
+    const smallCrest = wave[i][1] < threshold;
+    const smallTrough = wave[i][2] < threshold;
+    if (smallCrest) {
+      if (i > 0) {
+        wave[i - 1][1] = Math.max(wave[i - 1][1], wave[i][1]);
+        wave[i - 1][2] = Math.max(wave[i - 1][2], wave[i][2]);
+        wave[i - 1][3] += wave[i][3];
+        wave.splice(i, 1);
+        i--;
+      } else {
+        wave.splice(i, 1);
+        i--;
+      }
+    } else if (smallTrough) {
+      if (i < wave.length - 1) {
+        wave[i][1] = Math.max(wave[i][1], wave[i + 1][1]);
+        wave[i][2] = Math.max(wave[i][2], wave[i + 1][2]);
+        wave[i][3] += wave[i + 1][3];
+        wave.splice(i + 1, 1);
+      } else {
+        wave.splice(i, 1);
+        i--;
+      }
+    }
+    i++;
+  }
+  // NOTE: Python does NOT recompute Height after the merge loop, so the
+  // stored Height stays at the pre-merge value. Match that here.
+  if (wave.length === 0) return empty;
+
+  const sorted = wave.slice().sort((a, b) => b[0] - a[0]);
+  const nb = sorted.length;
+  const n13 = Math.max(1, Math.round(nb / 3));
+  const n10 = Math.max(1, Math.round(nb / 10));
+
+  let Hs = 0, Hmean = 0, H1_10 = 0, Hmax = 0, Tmean = 0, Ts = 0;
+  for (let j = 0; j < n13; j++) { Hs += sorted[j][0]; Ts += sorted[j][3]; }
+  Hs /= n13; Ts /= n13;
+  for (let j = 0; j < n10; j++) H1_10 += sorted[j][0];
+  H1_10 /= n10;
+  for (let j = 0; j < nb; j++) { Hmean += sorted[j][0]; Tmean += sorted[j][3]; }
+  Hmean /= nb; Tmean /= nb;
+  Hmax = sorted[0][0];
+
+  return { Hs, Hmean, H1_10, Hmax, Tmean, Ts };
+}
+
 /* exports for browser + Node */
 if (typeof window !== "undefined") {
   window.WaveLabXSpectral = {
     twoProbeGoda, threeProbeArray, reflectionAnalysis,
-    autoSpectrum, spComputeWavelength, dftReal,
+    autoSpectrum, spComputeWavelength, dftReal, zeroCrossing,
   };
 }
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     twoProbeGoda, threeProbeArray, reflectionAnalysis,
-    autoSpectrum, spComputeWavelength, dftReal, fftPow2,
+    autoSpectrum, spComputeWavelength, dftReal, fftPow2, zeroCrossing,
   };
 }

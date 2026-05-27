@@ -9,6 +9,9 @@
 const G = 9.81;            // gravitational acceleration [m/s^2]
 const DL_MIN = 0.05;       // valid spacing range  0.05 <= dl/L <= 0.45
 const DL_MAX = 0.45;
+// Displayed in the footer as "Last update". Update this string whenever a
+// user-visible change is shipped to main (Vercel auto-deploys from main).
+const LAST_UPDATE = "27 May 2026, 14:00 UTC";
 
 /* ---------------------------------------------------------------------------
  * Linear dispersion relation  omega^2 = g k tanh(k d)  -> wave number k
@@ -172,7 +175,11 @@ function getSettings() {
   //   "2p_1_2" | "2p_1_3" | "2p_2_3"
   const methSel = $("methodOverride");
   const method = methSel && methSel.value ? methSel.value : "auto";
-  return { fs, fmin, fmax, depth, skipWaves, numWaves, pos1, pos2, method };
+  // Period & wavelength display: "Tp" (spectral peak, default) or "Tm"
+  // (zero-crossing mean). Switches the f/T/L columns and CSV.
+  const pdSel = $("periodDisplay");
+  const periodMode = pdSel && pdSel.value === "Tm" ? "Tm" : "Tp";
+  return { fs, fmin, fmax, depth, skipWaves, numWaves, pos1, pos2, method, periodMode };
 }
 
 /* Analyse one record. redetect = re-run frequency detection. */
@@ -278,18 +285,31 @@ function analyzeRecord(rec, redetect) {
       a2 = runArray(cols.slice(3, 6), s.pos2);
     }
 
-    // Peak frequency / period: prefer the spectral peak from the analysis
-    // when the user has not manually edited f; fall back to the detected
-    // frequency for the period otherwise.
+    // Peak frequency / period (from the incident spectrum): prefer the
+    // spectral peak from the analysis when the user has not manually edited
+    // f; fall back to the detected frequency otherwise.
     if (!rec.freqManual && a1 && a1.fp) rec.freq = a1.fp;
-    const period = (a1 && a1.Tp != null && Number.isFinite(a1.Tp)) ? a1.Tp
+    const Tp = (a1 && a1.Tp != null && Number.isFinite(a1.Tp)) ? a1.Tp
       : (rec.freq > 0 ? 1 / rec.freq : NaN);
+    const fp = Number.isFinite(Tp) && Tp > 0 ? 1 / Tp : NaN;
+    const Lp = Number.isFinite(fp) && fp > 0
+      ? wavelength(fp, rec.depth) : NaN;
 
-    // Goda spacing diagnostic for the current dominant frequency.
-    // We check every probe pair against 0.05 <= dx/L <= 0.45 and collect
-    // the failing pairs as { label, ratio, reason }. The base label for
-    // each gauge is the channel number in the original CSV (1..6).
-    const L = (rec.freq > 0) ? wavelength(rec.freq, rec.depth) : NaN;
+    // Zero-crossing mean period (Tm) on probe 1. Always computed so the
+    // user can switch the display via the Period & wavelength toggle
+    // without re-running the analysis.
+    let Tm = NaN, fm = NaN, Lm = NaN;
+    try {
+      const zc = SP.zeroCrossing(cols[0], s.fs);
+      if (zc && Number.isFinite(zc.Tmean) && zc.Tmean > 0) {
+        Tm = zc.Tmean;
+        fm = 1 / Tm;
+        Lm = wavelength(fm, rec.depth);
+      }
+    } catch (_) { /* zero-crossing failure: leave NaN */ }
+
+    // Goda spacing diagnostic: compute against both Lp and Lm so the
+    // out-of-band display can follow the toggle.
     const pairsOf = (pos, labels) => {
       const out = [];
       for (let i = 0; i < pos.length; i++)
@@ -298,22 +318,25 @@ function analyzeRecord(rec, redetect) {
                      label: `(${labels[i]}-${labels[j]})` });
       return out;
     };
-    const goda = (pairs) => {
+    const godaAt = (pairs, Lref) => {
       const fails = [];
-      if (!(Number.isFinite(L) && L > 0)) return fails;
+      if (!(Number.isFinite(Lref) && Lref > 0)) return fails;
       for (const p of pairs) {
-        const r = p.dx / L;
+        const r = p.dx / Lref;
         if (r < DL_MIN) fails.push({ label: p.label, ratio: r, reason: "low" });
         else if (r > DL_MAX) fails.push({ label: p.label, ratio: r, reason: "high" });
       }
       return fails;
     };
-    // Per-array labels follow the channel numbering in the CSV.
     const labels1 = rec.layout === "single2" ? [1, 2] : [1, 2, 3];
     const labels2 = [4, 5, 6];
     const pos1 = rec.layout === "single2" ? s.pos1.slice(0, 2) : s.pos1;
-    const outOfBand1 = goda(pairsOf(pos1, labels1));
-    const outOfBand2 = a2 ? goda(pairsOf(s.pos2, labels2)) : [];
+    const pp1 = pairsOf(pos1, labels1);
+    const pp2 = a2 ? pairsOf(s.pos2, labels2) : [];
+    const outOfBand1_p = godaAt(pp1, Lp);
+    const outOfBand2_p = godaAt(pp2, Lp);
+    const outOfBand1_m = godaAt(pp1, Lm);
+    const outOfBand2_m = godaAt(pp2, Lm);
 
     // Whether a two-probe fallback was selected for either array.
     const fallback1 = a1 && a1.method_used === "two_probe";
@@ -327,12 +350,21 @@ function analyzeRecord(rec, redetect) {
       Hi1: a1 ? a1.Hi : null, Hr1: a1 ? a1.Hr : null, Kr1: a1 ? a1.Kr : null,
       Hi2: a2 ? a2.Hi : null, Hr2: a2 ? a2.Hr : null, Kr2: a2 ? a2.Kr : null,
       Kt: (a1 && a2 && a1.Hi > 0) ? a2.Hi / a1.Hi : null,
-      period,
+      // Period / frequency / wavelength in both flavours; renderTable and
+      // exportCSV pick one set based on the periodMode toggle.
+      Tp, fp, Lp, Tm, fm, Lm,
+      // Backward-compatible aliases (period/L still used by older render
+      // paths and any external consumers that read rec.result directly).
+      period: Tp, L: Lp,
       method1: a1 ? a1.method_used : null,
       method2: a2 ? a2.method_used : null,
       fallback: fallback1 || fallback2,
-      L, outOfBand1, outOfBand2,
-      ratioWarn: outOfBand1.length > 0 || outOfBand2.length > 0,
+      outOfBand1_p, outOfBand2_p, outOfBand1_m, outOfBand2_m,
+      // Default-mode aliases for legacy callers; renderTable/CSV will use
+      // the mode-specific arrays directly via getDisplayPeriod().
+      outOfBand1: outOfBand1_p, outOfBand2: outOfBand2_p,
+      ratioWarn: outOfBand1_p.length > 0 || outOfBand2_p.length > 0
+              || outOfBand1_m.length > 0 || outOfBand2_m.length > 0,
       retained: ret, retainedWarn: Number.isFinite(ret) && !(ret >= 0.8),
       spectral: true,
     };
@@ -358,6 +390,14 @@ function renderTable() {
   body.innerHTML = "";
   let anyFallback = false, anyRetained = false;
 
+  const s = getSettings();
+  const mode = s.periodMode;            // "Tp" or "Tm"
+  // Update column headers to match the toggle.
+  const sub = mode === "Tm" ? "m" : "p";
+  const thF = $("th-f"); if (thF) thF.innerHTML = `<i>f</i><sub>${sub}</sub> (Hz)`;
+  const thT = $("th-T"); if (thT) thT.innerHTML = `<i>T</i><sub>${sub}</sub> (s)`;
+  const thL = $("th-L"); if (thL) thL.innerHTML = `<i>L</i><sub>${sub}</sub> (m)`;
+
   state.records.forEach((rec) => {
     const tr = document.createElement("tr");
     const r = rec.result;
@@ -367,13 +407,18 @@ function renderTable() {
     const depthCell = `<td class="editable">
         <input type="number" step="0.01" min="0" value="${rec.depth ?? ""}"
                data-id="${rec.id}" data-field="depth" /></td>`;
-    const freqVal = rec.freq != null ? rec.freq.toFixed(3) : "";
-    // f is always editable: the user can override the auto-detected dominant
-    // frequency, which is used for the skip-/use-N-waves windowing and for
-    // the period column. The reflectionAnalysis output is independent of f.
-    const freqCell = `<td class="editable">
-        <input type="number" step="0.001" min="0" value="${freqVal}"
-               data-id="${rec.id}" data-field="freq" /></td>`;
+    // f cell: editable spectral-peak input in Tp mode (drives windowing).
+    // In Tm mode it shows the zero-crossing-derived fm read-only.
+    let freqCell;
+    if (mode === "Tm") {
+      const fmVal = r && Number.isFinite(r.fm) ? r.fm.toFixed(3) : "";
+      freqCell = `<td title="zero-crossing mean frequency (read-only)">${fmVal || "&mdash;"}</td>`;
+    } else {
+      const freqVal = rec.freq != null ? rec.freq.toFixed(3) : "";
+      freqCell = `<td class="editable">
+          <input type="number" step="0.001" min="0" value="${freqVal}"
+                 data-id="${rec.id}" data-field="freq" /></td>`;
+    }
 
     if (rec.error) {
       tr.innerHTML = `
@@ -382,11 +427,14 @@ function renderTable() {
         <td colspan="9" class="badge-err">${rec.error}</td>
         <td><button class="row-del" data-del="${rec.id}">&times;</button></td>`;
     } else {
-      const warnRow = r.fallback || r.ratioWarn || r.retainedWarn;
+      // ratioWarn now combines both Tp and Tm Goda checks; recompute for the
+      // active mode so the row warning matches what's visible on screen.
+      const oob1 = mode === "Tm" ? r.outOfBand1_m : r.outOfBand1_p;
+      const oob2 = mode === "Tm" ? r.outOfBand2_m : r.outOfBand2_p;
+      const ratioWarnMode = (oob1 && oob1.length > 0) || (oob2 && oob2.length > 0);
+      const warnRow = r.fallback || ratioWarnMode || r.retainedWarn;
       const cls = warnRow ? ' class="fallback"' : "";
       const flag = warnRow ? " &#9888;" : "";
-      // Per-array method indicator: 3P (three-probe) or 2P (two-probe Goda).
-      // For single-array records (2 or 3 channels) the second array is empty.
       const badge = (m) => {
         if (m == null) return "";
         return m === "two_probe"
@@ -398,11 +446,13 @@ function renderTable() {
       const layoutTag = r.layout === "single2" ? ' <span class="lay-tag">2-probe</span>'
         : r.layout === "single3" ? ' <span class="lay-tag">3-probe</span>'
         : "";
+      const Tshow = mode === "Tm" ? r.Tm : r.Tp;
+      const Lshow = mode === "Tm" ? r.Lm : r.Lp;
       tr.innerHTML = `
         <td title="${rec.name}">${rec.name}${flag}${layoutTag}</td>
         ${depthCell}${freqCell}
-        <td>${fmt(r.period, 3)}</td>
-        <td>${fmt(r.L, 3)}</td>
+        <td>${fmt(Tshow, 3)}</td>
+        <td>${fmt(Lshow, 3)}</td>
         <td${cls}>${fmt(r.Hi1)} ${m1}</td>
         <td${cls}>${fmt(r.Hr1)}</td>
         <td${cls}>${fmt(r.Kr1, 3)}</td>
@@ -426,14 +476,17 @@ function renderTable() {
       "system was ill-conditioned (spacing near a multiple of L/2).");
 
   // Build a per-row, per-pair Goda-spacing report listing exactly which
-  // probe pair fell outside 0.05 <= dx/L <= 0.45.
+  // probe pair fell outside 0.05 <= dx/L <= 0.45. The diagnostic uses
+  // whichever wavelength (Lp or Lm) matches the active toggle.
   const ratioRows = [];
   state.records.forEach((rec) => {
     const r = rec.result;
     if (!r) return;
+    const oob1 = mode === "Tm" ? (r.outOfBand1_m || []) : (r.outOfBand1_p || []);
+    const oob2 = mode === "Tm" ? (r.outOfBand2_m || []) : (r.outOfBand2_p || []);
     const fails = [
-      ...(r.outOfBand1 || []).map((f) => ({ ...f, arr: r.layout === "dual6" ? " (Array 1)" : "" })),
-      ...(r.outOfBand2 || []).map((f) => ({ ...f, arr: " (Array 2)" })),
+      ...oob1.map((f) => ({ ...f, arr: r.layout === "dual6" ? " (Array 1)" : "" })),
+      ...oob2.map((f) => ({ ...f, arr: " (Array 2)" })),
     ];
     if (!fails.length) return;
     const parts = fails.map((f) => {
@@ -442,10 +495,13 @@ function renderTable() {
     });
     ratioRows.push(`<i>${rec.name}</i>: ${parts.join("; ")}`);
   });
-  if (ratioRows.length)
-    msgs.push("&#9888; Gauge spacing outside 0.05 &le; &Delta;x/L &le; 0.45 at the "
-      + "dominant frequency:<br>&nbsp;&nbsp;&nbsp;"
+  if (ratioRows.length) {
+    const Lref = mode === "Tm" ? "L<sub>m</sub>" : "L<sub>p</sub>";
+    msgs.push("&#9888; Gauge spacing outside 0.05 &le; &Delta;x/" + Lref + " &le; 0.45 at the "
+      + (mode === "Tm" ? "zero-crossing mean" : "spectral peak") + " frequency:"
+      + "<br>&nbsp;&nbsp;&nbsp;"
       + ratioRows.join("<br>&nbsp;&nbsp;&nbsp;"));
+  }
 
   if (anyRetained)
     msgs.push("&#9888; Some rows retained less than 80% of spectral energy " +
@@ -1217,14 +1273,16 @@ function readFiles(fileList) {
  * Export
  * ------------------------------------------------------------------------- */
 function exportCSV() {
-  // Pretty, human-readable column titles with units in parentheses.
-  // Quoting every header keeps Excel-style parsers happy with the spaces.
+  const s = getSettings();
+  const mode = s.periodMode;            // "Tp" or "Tm"
+  const sub = mode === "Tm" ? "m" : "p";
+  const fLabel = `Frequency f${sub} (Hz)`;
+  const tLabel = `Period T${sub} (s)`;
+  const lLabel = `Wavelength L${sub} (m)`;
   const head = [
     "File",
     "Water depth (m)",
-    "Frequency f (Hz)",
-    "Period T (s)",
-    "Wavelength L (m)",
+    fLabel, tLabel, lLabel,
     "Hi - Array 1 (m)",
     "Hr - Array 1 (m)",
     "Kr - Array 1",
@@ -1239,17 +1297,16 @@ function exportCSV() {
   ].map((h) => `"${h}"`);
 
   const rows = [head.join(",")];
-  // Render method names as readable English (no HTML, no internal token).
   const prettyMethod = (m) =>
     m === "three_probe" ? "Three-probe"
     : m === "two_probe" ? "Two-probe"
     : "";
-  // Render out-of-band pairs as a single readable cell.
   const prettyOOB = (r) => {
+    const oob1 = mode === "Tm" ? (r.outOfBand1_m || []) : (r.outOfBand1_p || []);
+    const oob2 = mode === "Tm" ? (r.outOfBand2_m || []) : (r.outOfBand2_p || []);
     const all = [
-      ...(r.outOfBand1 || []).map((f) =>
-        ({ ...f, arr: r.layout === "dual6" ? " Array 1" : "" })),
-      ...(r.outOfBand2 || []).map((f) => ({ ...f, arr: " Array 2" })),
+      ...oob1.map((f) => ({ ...f, arr: r.layout === "dual6" ? " Array 1" : "" })),
+      ...oob2.map((f) => ({ ...f, arr: " Array 2" })),
     ];
     if (!all.length) return "";
     return all.map((f) => {
@@ -1261,18 +1318,26 @@ function exportCSV() {
   state.records.forEach((rec) => {
     const r = rec.result;
     if (!r) {
+      // 16-column row: File, depth, f, T, L, Hi1, Hr1, Kr1, Method1,
+      // Hi2, Hr2, Kr2, Method2, Kt, fallback, OOB (error goes here).
+      // 3 columns already filled (name, depth, freq) + 12 empty between
+      // T/L through fallback + 1 error message = 16 fields.
+      const empties = Array(12).fill("");
       rows.push([
         `"${rec.name}"`, rec.depth ?? "", rec.freq ?? "",
-        "", "", "", "", "", "", "", "", "", "", "", "",
+        ...empties,
         `"${(rec.error || "error").replace(/"/g, "'")}"`,
       ].join(","));
       return;
     }
     const g = (x, p) => (x == null || Number.isNaN(x) ? "" : Number(x).toFixed(p));
     const oob = prettyOOB(r);
+    const fOut = mode === "Tm" ? r.fm : r.fp;
+    const TOut = mode === "Tm" ? r.Tm : r.Tp;
+    const LOut = mode === "Tm" ? r.Lm : r.Lp;
     rows.push([
       `"${rec.name}"`,
-      g(rec.depth, 4), g(rec.freq, 5), g(r.period, 4), g(r.L, 4),
+      g(rec.depth, 4), g(fOut, 5), g(TOut, 4), g(LOut, 4),
       g(r.Hi1, 6), g(r.Hr1, 6), g(r.Kr1, 4),
       `"${prettyMethod(r.method1)}"`,
       g(r.Hi2, 6), g(r.Hr2, 6), g(r.Kr2, 4),
@@ -1296,6 +1361,10 @@ function exportCSV() {
  * Wiring
  * ------------------------------------------------------------------------- */
 function init() {
+  // Footer: last-update stamp (manual constant updated per release).
+  const lu = $("lastUpdate");
+  if (lu) lu.textContent = LAST_UPDATE;
+
   const dz = $("dropzone");
   const fileInput = $("fileInput");
 
@@ -1339,6 +1408,21 @@ function init() {
       if (state.records.length) analyzeAll(true);
     })
   );
+  // Period & wavelength toggle -> just re-render the table; both Tp and Tm
+  // are precomputed during analyzeRecord(), no re-analysis needed.
+  const pdEl = $("periodDisplay");
+  if (pdEl) pdEl.addEventListener("change", () => {
+    try { localStorage.setItem("wlx_periodMode", pdEl.value); } catch (_) { /* ignore */ }
+    if (state.records.length) renderTable();
+  });
+  // Restore previous selection on load.
+  try {
+    const saved = localStorage.getItem("wlx_periodMode");
+    if (saved === "Tm" || saved === "Tp") {
+      const el = $("periodDisplay");
+      if (el) el.value = saved;
+    }
+  } catch (_) { /* ignore */ }
 
   // visualization controls
   $("vizFile").addEventListener("change", () => {

@@ -200,6 +200,17 @@ def two_probe_goda(
                     dpi=300, bbox_inches="tight")
         plt.close(fig)
 
+    # Peak frequency / period from the incident spectrum within the valid band.
+    fp_val = float("nan"); Tp_val = float("nan")
+    if valid_idx.size:
+        Si_valid = Si[valid_idx]
+        if np.any(np.isfinite(Si_valid)):
+            ipk = valid_idx[int(np.nanargmax(Si_valid))]
+            fpk = float(f[ipk])
+            if fpk > 0:
+                fp_val = fpk
+                Tp_val = 1.0 / fpk
+
     return {
         "Kr": Kr,
         "Hi": Hi,
@@ -207,6 +218,8 @@ def two_probe_goda(
         "Si": Si,
         "Sr": Sr,
         "f": f,
+        "fp": fp_val,
+        "Tp": Tp_val,
         "cond": cond,
         "bad_cond": bad_cond,
         "valid": valid,

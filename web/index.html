@@ -139,6 +139,27 @@
           </div>
         </div>
         <div class="field">
+          <label for="periodDisplay">Period &amp; wavelength</label>
+          <select id="periodDisplay">
+            <option value="Tp" selected>T<sub>p</sub> (spectral peak)</option>
+            <option value="Tm">T<sub>m</sub> (zero-crossing mean)</option>
+          </select>
+          <details class="field-help">
+            <summary>What does this do?</summary>
+            <p class="muted small">
+              Switches the displayed period <i>T</i>, frequency <i>f</i> and
+              wavelength <i>L</i> in the results table and CSV export.
+              <strong>T<sub>p</sub></strong> is the spectral peak from the
+              incident spectrum; <strong>T<sub>m</sub></strong> is the mean
+              wave period from a zero-crossing analysis of probe&nbsp;1. For
+              regular records the two agree; for irregular records
+              T<sub>m</sub>&nbsp;&lt;&nbsp;T<sub>p</sub>. The reflection
+              math is unchanged &mdash; per-bin masking always uses the full
+              spectrum.
+            </p>
+          </details>
+        </div>
+        <div class="field">
           <label for="methodOverride">Analysis method</label>
           <select id="methodOverride">
             <option value="auto" selected>Auto (3-probe + 2-probe fallback)</option>
@@ -319,9 +340,9 @@
             <tr>
               <th>File</th>
               <th><i>d</i> (m)</th>
-              <th id="th-f"><i>f</i> (Hz)</th>
-              <th id="th-T"><i>T</i> (s)</th>
-              <th><i>L</i> (m)</th>
+              <th id="th-f"><i>f</i><sub>p</sub> (Hz)</th>
+              <th id="th-T"><i>T</i><sub>p</sub> (s)</th>
+              <th id="th-L"><i>L</i><sub>p</sub> (m)</th>
               <th>H<sub>i1</sub> (m)</th>
               <th>H<sub>r1</sub> (m)</th>
               <th>K<sub>r1</sub></th>
@@ -372,6 +393,9 @@
       </p>
       <p class="footer-fine">
         Runs entirely in your browser &mdash; no data is uploaded.
+      </p>
+      <p class="footer-fine">
+        Last update: <span id="lastUpdate">&mdash;</span>
       </p>
     </div>
   </footer>

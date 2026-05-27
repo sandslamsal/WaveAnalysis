@@ -377,6 +377,15 @@ def three_probe_array(
 
         fig2.savefig(os.path.join(figures_dir, f"{save_prefix}_incident_reflected.png"), bbox_inches="tight")
 
+    # Peak frequency / period from the incident spectrum within the valid band.
+    fp_val = float("nan"); Tp_val = float("nan")
+    if Si.size and np.any(np.isfinite(Si)):
+        ipk = int(np.nanargmax(Si))
+        fpk = float(flim[ipk])
+        if fpk > 0:
+            fp_val = fpk
+            Tp_val = 1.0 / fpk
+
     return {
         # Primary output keys
         "Kr": refco,
@@ -392,6 +401,8 @@ def three_probe_array(
         "Ssum": Ssum,
         "Sf": Sf,  # (gauge spectrum; kept for diagnostics)
         "f": flim,
+        "fp": fp_val,
+        "Tp": Tp_val,
         # Diagnostics
         "cond_pair": cond_pair,
         "bad_cond_pair": bad_cond_pair,
