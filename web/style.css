@@ -252,37 +252,55 @@ td.fallback { color: var(--warn); }
 }
 .info-tip:hover, .info-tip:focus { color: #1f5fa6; outline: none; }
 
-/* Collapsible inline help block shown under a settings field; clicking the
-   "What does this do?" summary expands a short description. */
-.field-help {
+/* Small "i" info button next to a settings label. Click toggles a popover
+   with a short description. Replaces the earlier "What does this do?"
+   <details> disclosure. */
+.info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid #c7d2dd;
+  border-radius: 50%;
+  background: #f3f7fb;
+  color: #1f5fa6;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.info-btn:hover, .info-btn[aria-expanded="true"] {
+  background: #1f5fa6;
+  border-color: #1f5fa6;
+  color: #fff;
+}
+.info-btn:focus { outline: 2px solid #1f5fa6aa; outline-offset: 1px; }
+.info-pop {
   margin-top: 6px;
+  padding: 8px 10px;
+  background: #f4f8fc;
+  border: 1px solid #d7e2ed;
+  border-left: 3px solid #1f5fa6;
+  border-radius: 4px;
   font-size: 0.78rem;
   color: #555;
 }
-.field-help > summary {
-  cursor: pointer;
-  color: #1f5fa6;
-  list-style: none;
-  display: inline-block;
-  padding: 1px 0;
-  user-select: none;
-}
-.field-help > summary::-webkit-details-marker { display: none; }
-.field-help > summary::before {
-  content: "▸ ";
-  display: inline-block;
-  width: 0.9em;
-  transition: transform 0.15s ease;
-  color: #1f5fa6;
-}
-.field-help[open] > summary::before { content: "▾ "; }
-.field-help > summary:hover { text-decoration: underline; }
-.field-help > ul {
-  margin: 6px 0 4px 0;
+.info-pop[hidden] { display: none; }
+.info-pop > ul {
+  margin: 0 0 4px 0;
   padding-left: 1.2em;
 }
-.field-help > ul li { margin-bottom: 3px; }
-.field-help > p { margin: 4px 0 0 0; }
+.info-pop > ul li { margin-bottom: 3px; }
+.info-pop > p { margin: 4px 0 0 0; }
+.info-pop > p:first-child { margin-top: 0; }
 
 /* Per-record layout tag shown next to the file name when the CSV is
    2-channel ("2-probe") or 3-channel ("3-probe"); the dual-array case
@@ -389,9 +407,13 @@ td.fallback { color: var(--warn); }
 }
 .footer-fine-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
+  text-align: center;
+}
+.footer-sep {
+  color: rgba(255, 255, 255, 0.3);
 }
 
 /* Wave-type toggle styles removed in v0.3.0 along with the toggle itself. */

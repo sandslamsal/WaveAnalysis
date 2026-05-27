@@ -11,7 +11,7 @@ const DL_MIN = 0.05;       // valid spacing range  0.05 <= dl/L <= 0.45
 const DL_MAX = 0.45;
 // Displayed in the footer as "Last update". Update this string whenever a
 // user-visible change is shipped to main (Vercel auto-deploys from main).
-const LAST_UPDATE = "27 May 2026, 15:30 UTC";
+const LAST_UPDATE = "27 May 2026, 16:00 UTC";
 
 /* ---------------------------------------------------------------------------
  * Linear dispersion relation  omega^2 = g k tanh(k d)  -> wave number k
@@ -1411,6 +1411,39 @@ function init() {
   // Footer: last-update stamp (manual constant updated per release).
   const lu = $("lastUpdate");
   if (lu) lu.textContent = LAST_UPDATE;
+
+  // Info "i" buttons: click toggles the matching popover; clicking
+  // anywhere outside closes any open popover. Replaces the older
+  // "What does this do?" <details> disclosure.
+  document.querySelectorAll(".info-btn").forEach((btn) => {
+    btn.setAttribute("aria-expanded", "false");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.info;
+      const pop = id ? $(id) : null;
+      if (!pop) return;
+      const willOpen = pop.hasAttribute("hidden");
+      // close any other popover first
+      document.querySelectorAll(".info-pop").forEach((p) => {
+        if (p !== pop) p.setAttribute("hidden", "");
+      });
+      document.querySelectorAll(".info-btn").forEach((b) => {
+        if (b !== btn) b.setAttribute("aria-expanded", "false");
+      });
+      if (willOpen) {
+        pop.removeAttribute("hidden");
+        btn.setAttribute("aria-expanded", "true");
+      } else {
+        pop.setAttribute("hidden", "");
+        btn.setAttribute("aria-expanded", "false");
+      }
+    });
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".info-pop") || e.target.closest(".info-btn")) return;
+    document.querySelectorAll(".info-pop").forEach((p) => p.setAttribute("hidden", ""));
+    document.querySelectorAll(".info-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
+  });
 
   const dz = $("dropzone");
   const fileInput = $("fileInput");
