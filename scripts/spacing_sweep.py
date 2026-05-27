@@ -90,7 +90,7 @@ def three_probe_sweep(dx_over_L, noise_std=0.0, seed0=2000):
     """Three-probe sweep with an asymmetric geometry.
 
     The first spacing X12 is held fixed at 0.10 L (well inside the Goda
-    band) while the second spacing X23 is swept across the same range
+    band) while the second spacing X23 is varied across the same range
     as the two-probe sweep. This explicitly tests the redundancy of the
     three-probe routine: when one pair falls outside the Goda band,
     per-frequency masking discards it and the remaining in-band pairs
@@ -175,18 +175,18 @@ def main():
             "title_color": "#0b3d91",
             "noise": {
                 0:  {"color": "#000000", "marker": "o", "label": "noise-free"},
-                3:  {"color": "#5b8fd6", "marker": "s", "label": r"3\% of $H_i$"},
-                10: {"color": "#1f5fa6", "marker": "^", "label": r"10\% of $H_i$"},
-                30: {"color": "#0b3d91", "marker": "D", "label": r"30\% of $H_i$"},
+                3:  {"color": "#5b8fd6", "marker": "s", "label": r"3% of $H_i$"},
+                10: {"color": "#1f5fa6", "marker": "^", "label": r"10% of $H_i$"},
+                30: {"color": "#0b3d91", "marker": "D", "label": r"30% of $H_i$"},
             },
         },
         "b": {  # three-probe — orange/red family
             "title_color": "#993300",
             "noise": {
                 0:  {"color": "#000000", "marker": "o", "label": "noise-free"},
-                3:  {"color": "#f6b26b", "marker": "s", "label": r"3\% of $H_i$"},
-                10: {"color": "#e6692a", "marker": "^", "label": r"10\% of $H_i$"},
-                30: {"color": "#a32a04", "marker": "D", "label": r"30\% of $H_i$"},
+                3:  {"color": "#f6b26b", "marker": "s", "label": r"3% of $H_i$"},
+                10: {"color": "#e6692a", "marker": "^", "label": r"10% of $H_i$"},
+                30: {"color": "#a32a04", "marker": "D", "label": r"30% of $H_i$"},
             },
         },
     }
@@ -197,7 +197,7 @@ def main():
         axes,
         (two_runs, three_runs),
         ("(a) Two-probe Goda--Suzuki",
-         r"(b) Three-probe ($X_{12}=0.10\,L$, $X_{23}$ swept)"),
+         r"(b) Three-probe ($X_{12}=0.10\,L$, $X_{23}$ varied)"),
         ("a", "b"),
     ):
         pstyle = panel_styles[key]
