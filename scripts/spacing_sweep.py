@@ -87,17 +87,21 @@ def two_probe_sweep(dx_over_L, noise_std=0.0, seed0=1000):
 
 
 def three_probe_sweep(dx_over_L, noise_std=0.0, seed0=2000):
-    """Three-probe sweep with equal-spacing geometry (X12 = X23 = dx).
+    """Three-probe sweep with an asymmetric geometry.
 
-    For each dx/L, the three gauges sit at (0, dx, 2*dx). This makes the
-    1D sweep directly comparable to the two-probe case while still
-    exercising the redundant three-probe routine and its per-pair Goda
-    + conditioning masking.
+    The first spacing X12 is held fixed at 0.10 L (well inside the Goda
+    band) while the second spacing X23 is swept across the same range
+    as the two-probe sweep. This explicitly tests the redundancy of the
+    three-probe routine: when one pair falls outside the Goda band,
+    per-frequency masking discards it and the remaining in-band pairs
+    are averaged. The result is a method that recovers over a much
+    wider range of X23/L than a single-pair two-probe analysis.
     """
+    x12 = 0.10 * LP  # fixed first spacing, well inside the Goda band
     rows = []
     for i, r in enumerate(dx_over_L):
-        dx = r * LP
-        gpos = (0.0, dx, 2.0 * dx)
+        x23 = r * LP
+        gpos = (0.0, x12, x12 + x23)
         eta, truth = _synthetic_irregular_gauges(
             fs=FS, duration=DURATION, h=H, gpos=gpos,
             Tpeak=TPEAK, Hi=HI, Kr=KR, seed=seed0 + i, noise_std=noise_std,
@@ -193,7 +197,7 @@ def main():
         axes,
         (two_runs, three_runs),
         ("(a) Two-probe Goda--Suzuki",
-         "(b) Three-probe redundant array (equal spacing)"),
+         r"(b) Three-probe ($X_{12}=0.10\,L$, $X_{23}$ swept)"),
         ("a", "b"),
     ):
         pstyle = panel_styles[key]
