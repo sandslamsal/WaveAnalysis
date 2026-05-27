@@ -163,32 +163,62 @@ def main():
     print(f"Wrote {csv_path}")
 
     # ---- Combined two-panel figure: 2P (left) + 3P (right) -------------
-    r = [d["dx_over_L"] for d in two_runs[0]]
-    cmap = plt.get_cmap("viridis")
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.4),
+    # Each method gets its own colour family so the method identity is
+    # visually obvious even before reading the title; within each panel
+    # the noise level is encoded by line shade plus marker shape.
+    panel_styles = {
+        "a": {  # two-probe — blue family
+            "title_color": "#0b3d91",
+            "noise": {
+                0:  {"color": "#000000", "marker": "o", "label": "noise-free"},
+                3:  {"color": "#5b8fd6", "marker": "s", "label": r"3\% of $H_i$"},
+                10: {"color": "#1f5fa6", "marker": "^", "label": r"10\% of $H_i$"},
+                30: {"color": "#0b3d91", "marker": "D", "label": r"30\% of $H_i$"},
+            },
+        },
+        "b": {  # three-probe — orange/red family
+            "title_color": "#993300",
+            "noise": {
+                0:  {"color": "#000000", "marker": "o", "label": "noise-free"},
+                3:  {"color": "#f6b26b", "marker": "s", "label": r"3\% of $H_i$"},
+                10: {"color": "#e6692a", "marker": "^", "label": r"10\% of $H_i$"},
+                30: {"color": "#a32a04", "marker": "D", "label": r"30\% of $H_i$"},
+            },
+        },
+    }
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.6),
                              constrained_layout=True, sharey=True)
-    for ax, runs, title in zip(
+    for ax, runs, title, key in zip(
         axes,
         (two_runs, three_runs),
-        ("(a) Two-probe", "(b) Three-probe (equal spacing)"),
+        ("(a) Two-probe Goda--Suzuki",
+         "(b) Three-probe redundant array (equal spacing)"),
+        ("a", "b"),
     ):
-        ax.axhspan(-5, 5, color="0.88", label=r"$\pm 5\%$ band")
-        ax.axvspan(GODA_LO, GODA_HI, color="#cfe8cf", alpha=0.45,
-                   label=f"Goda band {GODA_LO:g}-{GODA_HI:g}")
-        ax.axhline(0.0, color="0.4", linewidth=0.6)
-        for k, pct in enumerate(noise_levels_pct):
-            color = cmap(0.05 + 0.85 * k / max(1, len(noise_levels_pct) - 1))
-            label = "noise-free" if pct == 0 else f"{pct}% of $H_i$"
+        pstyle = panel_styles[key]
+        ax.axhspan(-5, 5, color="0.88", label=r"$\pm 5\%$ band",
+                   zorder=0)
+        ax.axvspan(GODA_LO, GODA_HI, color="#d6ead6", alpha=0.55,
+                   label=f"Goda band {GODA_LO:g}-{GODA_HI:g}", zorder=0)
+        ax.axhline(0.0, color="0.4", linewidth=0.6, zorder=0)
+        for pct in noise_levels_pct:
+            ns = pstyle["noise"][pct]
             ax.plot([d["dx_over_L"] for d in runs[pct]],
                     [d["err_Hi"] for d in runs[pct]],
-                    "-o", ms=2.5, lw=1.1, color=color, label=label)
+                    linestyle="-", marker=ns["marker"], ms=4.0,
+                    lw=1.4, color=ns["color"], label=ns["label"],
+                    markeredgecolor=ns["color"],
+                    markerfacecolor="white",
+                    markeredgewidth=1.1, zorder=3)
         ax.set_xlabel(r"Non-dimensional probe spacing $\Delta x / L$")
-        ax.set_title(title, loc="left", fontsize=10)
+        ax.set_title(title, loc="left", fontsize=10.5,
+                     color=pstyle["title_color"], fontweight="bold")
         ax.grid(alpha=0.3)
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
+        ax.legend(fontsize=8, loc="lower right", ncol=1, frameon=True)
     axes[0].set_ylabel(r"Incident $H_{m0}$ error [%]")
-    axes[1].legend(fontsize=7.5, loc="lower right", ncol=2, frameon=True)
     fig_path = os.path.join(fig_dir, "spacing_sensitivity.png")
     fig.savefig(fig_path, dpi=300, bbox_inches="tight")
     print(f"Wrote {fig_path}\n")
