@@ -11,7 +11,7 @@ const DL_MIN = 0.05;       // valid spacing range  0.05 <= dl/L <= 0.45
 const DL_MAX = 0.45;
 // Displayed in the footer as "Last update". Update this string whenever a
 // user-visible change is shipped to main (Vercel auto-deploys from main).
-const LAST_UPDATE = "27 May 2026, 16:00 UTC";
+const LAST_UPDATE = "27 May 2026, 16:30 UTC";
 
 /* ---------------------------------------------------------------------------
  * Linear dispersion relation  omega^2 = g k tanh(k d)  -> wave number k
@@ -682,7 +682,60 @@ function refreshVizFiles() {
     sel.appendChild(o);
   });
   if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+  refreshVizControls();
   if ($("vizBox") && $("vizBox").open) drawViz();
+}
+
+/* Adapt the visualization controls (probe checkboxes, curve checkboxes
+ * and plot-type options) to the column count of the currently selected
+ * file. A 3-column record only has probes 1-3 and only one (Incident /
+ * Reflected) array; a 2-column record additionally has no spectrum plot
+ * via three-probe analysis.
+ *
+ * Called whenever the selected file changes or new records are loaded.
+ * Idempotent. */
+function refreshVizControls() {
+  const sel = $("vizFile");
+  if (!sel) return;
+  const rec = state.records.find((r) => String(r.id) === sel.value);
+  const nCols = rec && rec.cols ? rec.cols.length : 6;
+  const layout = rec ? rec.layout : "dual6";
+
+  // Hide probe-checkbox labels for probes that don't exist in this file,
+  // and uncheck them so they don't filter into the plot.
+  document.querySelectorAll(".viz-probe-lbl").forEach((lbl) => {
+    const i = +lbl.dataset.i;
+    const visible = i < nCols;
+    lbl.style.display = visible ? "" : "none";
+    if (!visible) {
+      const cb = lbl.querySelector("input.viz-probe");
+      if (cb) cb.checked = false;
+    }
+  });
+
+  // Hide the Transmitted curve unless this is a dual (6-channel) record.
+  const showTra = layout === "dual6";
+  document.querySelectorAll(".viz-curve-lbl").forEach((lbl) => {
+    if (lbl.dataset.c !== "tra") return;
+    lbl.style.display = showTra ? "" : "none";
+    if (!showTra) {
+      const cb = lbl.querySelector("input.viz-curve");
+      if (cb) cb.checked = false;
+    }
+  });
+
+  // Plot-type dropdown: spectrum option requires >=3 channels (one full
+  // three-probe array). For 2-channel records, hide it and switch the
+  // selection to Time Series if it was on Spectrum.
+  const typeSel = $("vizType");
+  if (typeSel) {
+    const specOpt = [...typeSel.options].find((o) => o.value === "spectrum");
+    if (specOpt) {
+      specOpt.disabled = nCols < 3;
+      specOpt.hidden = nCols < 3;
+      if (nCols < 3 && typeSel.value === "spectrum") typeSel.value = "series";
+    }
+  }
 }
 
 /* Adaptive numeric format for an axis, given the range it spans. */
@@ -738,16 +791,27 @@ function buildSpectrumPlot(rec) {
     : typeof window !== "undefined" ? window.WaveLabXSpectral : null;
   if (!SP) return { empty: "Spectral module not loaded." };
   if (!(rec.depth > 0)) return { empty: "Set a water depth for this file first." };
+  const nCols = rec.cols.length;
+  if (nCols < 2) return { empty: "Not enough channels for incident/reflected separation." };
 
   const fs = parseFloat($("fs").value) || 100;
   const s = getSettings();
-  const key = [rec.id, fs, rec.depth, s.pos1.join(","), s.pos2.join(",")].join("|");
+  const key = [rec.id, fs, rec.depth, s.pos1.join(","), s.pos2.join(","), nCols].join("|");
   if (!vizSpecCache || vizSpecCache.key !== key) {
-    vizSpecCache = {
-      key,
-      a1: SP.threeProbeArray(rec.cols.slice(0, 3), fs, rec.depth, s.pos1),
-      a2: SP.threeProbeArray(rec.cols.slice(3, 6), fs, rec.depth, s.pos2),
-    };
+    // Pick the routine that matches the layout. Two-channel records use
+    // twoProbeGoda; 3-channel records use a single threeProbeArray; only
+    // 6-channel records produce a second (transmitted) array.
+    let a1, a2 = null;
+    if (nCols === 2) {
+      a1 = SP.twoProbeGoda(rec.cols[0], rec.cols[1], fs, rec.depth,
+                           s.pos1[0], s.pos1[1]);
+    } else if (nCols === 3) {
+      a1 = SP.threeProbeArray(rec.cols.slice(0, 3), fs, rec.depth, s.pos1);
+    } else {
+      a1 = SP.threeProbeArray(rec.cols.slice(0, 3), fs, rec.depth, s.pos1);
+      a2 = SP.threeProbeArray(rec.cols.slice(3, 6), fs, rec.depth, s.pos2);
+    }
+    vizSpecCache = { key, a1, a2 };
   }
   const { a1, a2 } = vizSpecCache;
 
@@ -764,7 +828,7 @@ function buildSpectrumPlot(rec) {
   if (want.includes("ref"))
     series.push({ label: "Reflected", color: VIZ_SPEC.ref,
       x: a1.spectra.f, y: movAvg(a1.spectra.Sr, win) });
-  if (want.includes("tra"))
+  if (want.includes("tra") && a2)
     series.push({ label: "Transmitted", color: VIZ_SPEC.tra,
       x: a2.spectra.f, y: movAvg(a2.spectra.Si, win) });
 
@@ -773,13 +837,16 @@ function buildSpectrumPlot(rec) {
     for (const xv of ser.x) { if (xv < xMin) xMin = xv; if (xv > xMax) xMax = xv; }
   if (!isFinite(xMin)) return { empty: "No spectral data in the valid frequency band." };
 
+  const probeRange =
+    nCols === 2 ? "probes 1–2 (two-probe Goda)"
+    : nCols === 3 ? "probes 1–3 (three-probe array)"
+    : "incident/reflected from probes 1–3, transmitted from probes 4–6";
   return {
     xLabel: "Frequency (Hz)",
     yLabel: "Spectral density S(f)",
     yUnit: "m²·s",
     xMin, xMax, series,
-    info: `${rec.name} — incident/reflected from probes 1–3, ` +
-      `transmitted from probes 4–6`,
+    info: `${rec.name} — ${probeRange}`,
   };
 }
 
@@ -1507,6 +1574,7 @@ function init() {
   // visualization controls
   $("vizFile").addEventListener("change", () => {
     vizView = null; vizYView = null; vizPins = []; vizHoverPt = null;
+    refreshVizControls();
     drawViz();
   });
   $("vizType").addEventListener("change", () => {
