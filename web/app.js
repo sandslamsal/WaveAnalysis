@@ -379,7 +379,7 @@ function renderTable() {
       tr.innerHTML = `
         <td title="${rec.name}">${rec.name}</td>
         ${depthCell}${freqCell}
-        <td colspan="8" class="badge-err">${rec.error}</td>
+        <td colspan="9" class="badge-err">${rec.error}</td>
         <td><button class="row-del" data-del="${rec.id}">&times;</button></td>`;
     } else {
       const warnRow = r.fallback || r.ratioWarn || r.retainedWarn;
@@ -402,6 +402,7 @@ function renderTable() {
         <td title="${rec.name}">${rec.name}${flag}${layoutTag}</td>
         ${depthCell}${freqCell}
         <td>${fmt(r.period, 3)}</td>
+        <td>${fmt(r.L, 3)}</td>
         <td${cls}>${fmt(r.Hi1)} ${m1}</td>
         <td${cls}>${fmt(r.Hr1)}</td>
         <td${cls}>${fmt(r.Kr1, 3)}</td>
@@ -1223,6 +1224,7 @@ function exportCSV() {
     "Water depth (m)",
     "Frequency f (Hz)",
     "Period T (s)",
+    "Wavelength L (m)",
     "Hi - Array 1 (m)",
     "Hr - Array 1 (m)",
     "Kr - Array 1",
@@ -1232,7 +1234,6 @@ function exportCSV() {
     "Kr - Array 2",
     "Method - Array 2",
     "Kt (transmission)",
-    "Wavelength L (m)",
     "Two-probe fallback used",
     "Out-of-band pairs",
   ].map((h) => `"${h}"`);
@@ -1271,12 +1272,12 @@ function exportCSV() {
     const oob = prettyOOB(r);
     rows.push([
       `"${rec.name}"`,
-      g(rec.depth, 4), g(rec.freq, 5), g(r.period, 4),
+      g(rec.depth, 4), g(rec.freq, 5), g(r.period, 4), g(r.L, 4),
       g(r.Hi1, 6), g(r.Hr1, 6), g(r.Kr1, 4),
       `"${prettyMethod(r.method1)}"`,
       g(r.Hi2, 6), g(r.Hr2, 6), g(r.Kr2, 4),
       `"${prettyMethod(r.method2)}"`,
-      g(r.Kt, 4), g(r.L, 4),
+      g(r.Kt, 4),
       r.fallback ? "yes" : "no",
       oob ? `"${oob}"` : "",
     ].join(","));

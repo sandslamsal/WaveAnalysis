@@ -27,6 +27,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from wavelabx.core import compute_wavelength
 from wavelabx.stats import zero_crossing
 from wavelabx.three_probe import three_probe_array
 
@@ -83,8 +84,10 @@ def main():
         r = three_probe_array(eta, fs=FS, h=H, gpos=gpos, plot=False)
         results.append(r)
 
+        Lp = compute_wavelength(H, zc["Tmean"])
         print(f"{name}")
-        print(f"  zero-crossing Hs = {zc['Hs']:.4f} m, Tmean = {zc['Tmean']:.2f} s")
+        print(f"  zero-crossing Hs = {zc['Hs']:.4f} m, Tmean = {zc['Tmean']:.2f} s, "
+              f"Lp = {Lp:.3f} m")
         print(f"  Hi = {r['Hi']:.4f} m, Hr = {r['Hr']:.4f} m, Kr = {r['Kr']:.3f}")
         print(f"  retained energy = {r['retained_energy_fraction']:.2f}, "
               f"max condition number = {np.nanmax(r['cond_pair']):.1e}\n")
