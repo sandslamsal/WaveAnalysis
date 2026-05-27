@@ -11,7 +11,7 @@ const DL_MIN = 0.05;       // valid spacing range  0.05 <= dl/L <= 0.45
 const DL_MAX = 0.45;
 // Displayed in the footer as "Last update". Update this string whenever a
 // user-visible change is shipped to main (Vercel auto-deploys from main).
-const LAST_UPDATE = "27 May 2026, 14:00 UTC";
+const LAST_UPDATE = "27 May 2026, 15:30 UTC";
 
 /* ---------------------------------------------------------------------------
  * Linear dispersion relation  omega^2 = g k tanh(k d)  -> wave number k
@@ -119,23 +119,56 @@ function detectFrequency(columns, fs, fmin, fmax) {
  * Records with other column counts are clipped to the nearest supported layout.
  * ------------------------------------------------------------------------- */
 function parseCSV(text) {
-  const lines = text.split(/\r?\n/);
+  // Strip an optional UTF-8 BOM and split on any line break (incl. classic
+  // \r-only line endings).
+  const t = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  const lines = t.split(/\r\n|\r|\n/);
+
+  // Pick whichever delimiter (comma, semicolon, tab, or runs of whitespace)
+  // gives the most consistent column count across the first few numeric
+  // rows. This handles space-separated lab exports without breaking the
+  // common comma case.
+  const delimiters = [/,/, /;/, /\t/, /[ \t]+/];
+  const scoreDelim = (re) => {
+    let best = 0;
+    for (let li = 0, k = 0; li < lines.length && k < 5; li++) {
+      const line = lines[li].trim();
+      if (!line) continue;
+      const parts = line.split(re).map((p) => p.trim()).filter((p) => p !== "");
+      if (parts.length < 2) continue;
+      const vals = parts.map((p) => parseFloat(p));
+      if (vals.some((v) => Number.isNaN(v))) continue;
+      k++;
+      best = Math.max(best, vals.length);
+    }
+    return best;
+  };
+  let delim = delimiters[0], bestScore = 0;
+  for (const re of delimiters) {
+    const s = scoreDelim(re);
+    if (s > bestScore) { bestScore = s; delim = re; }
+  }
+  if (bestScore < 2) return null;
+
   let nCols = null;
   const cols = [];
+  let droppedRows = 0;
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li].trim();
     if (!line) continue;
-    const parts = line.split(/[,;\t]/);
+    // Trim each field and drop empty trailing/leading fields. Empty
+    // trailing fields are the usual Excel artifact: "a,b,c," ends with "".
+    const parts = line.split(delim).map((p) => p.trim()).filter((p) => p !== "");
     if (parts.length < 2) continue;
     const vals = parts.map((p) => parseFloat(p));
-    if (vals.some((v) => Number.isNaN(v))) continue;   // header / junk row
+    if (vals.some((v) => Number.isNaN(v))) { droppedRows++; continue; }
     if (nCols === null) {
-      // Determine layout from the first numeric row.
       const n = vals.length;
       nCols = n >= 6 ? 6 : n >= 3 ? 3 : n >= 2 ? 2 : 0;
       if (!nCols) return null;
       for (let c = 0; c < nCols; c++) cols.push([]);
     }
+    if (vals.length < nCols) continue;        // skip short row
     for (let c = 0; c < nCols; c++) cols[c].push(vals[c]);
   }
   return cols.length ? cols : null;
@@ -175,10 +208,10 @@ function getSettings() {
   //   "2p_1_2" | "2p_1_3" | "2p_2_3"
   const methSel = $("methodOverride");
   const method = methSel && methSel.value ? methSel.value : "auto";
-  // Period & wavelength display: "Tp" (spectral peak, default) or "Tm"
-  // (zero-crossing mean). Switches the f/T/L columns and CSV.
+  // Period & wavelength display: "Tm" (zero-crossing mean, default) or
+  // "Tp" (spectral peak). Switches the f/T/L columns and CSV.
   const pdSel = $("periodDisplay");
-  const periodMode = pdSel && pdSel.value === "Tm" ? "Tm" : "Tp";
+  const periodMode = pdSel && pdSel.value === "Tp" ? "Tp" : "Tm";
   return { fs, fmin, fmax, depth, skipWaves, numWaves, pos1, pos2, method, periodMode };
 }
 
@@ -398,6 +431,14 @@ function renderTable() {
   const thT = $("th-T"); if (thT) thT.innerHTML = `<i>T</i><sub>${sub}</sub> (s)`;
   const thL = $("th-L"); if (thL) thL.innerHTML = `<i>L</i><sub>${sub}</sub> (m)`;
 
+  // Hide the Array-2 columns (Hi2, Hr2, Kr2, Kt) when no loaded record
+  // actually uses a second array. Single 2- and 3-column CSVs have only
+  // one array, so showing empty Array-2 cells is misleading.
+  const hasArr2 = state.records.some((rec) => rec.layout === "dual6");
+  document.querySelectorAll(".col-arr2").forEach((el) => {
+    el.style.display = hasArr2 ? "" : "none";
+  });
+
   state.records.forEach((rec) => {
     const tr = document.createElement("tr");
     const r = rec.result;
@@ -433,8 +474,14 @@ function renderTable() {
       const oob2 = mode === "Tm" ? r.outOfBand2_m : r.outOfBand2_p;
       const ratioWarnMode = (oob1 && oob1.length > 0) || (oob2 && oob2.length > 0);
       const warnRow = r.fallback || ratioWarnMode || r.retainedWarn;
-      const cls = warnRow ? ' class="fallback"' : "";
+      const warnCls = warnRow ? "fallback" : "";
       const flag = warnRow ? " &#9888;" : "";
+      // Tag the four Array-2 cells with col-arr2 so they hide together
+      // with the matching header when only single-array records exist.
+      const mk = (...c) => {
+        const all = c.filter(Boolean).join(" ");
+        return all ? ` class="${all}"` : "";
+      };
       const badge = (m) => {
         if (m == null) return "";
         return m === "two_probe"
@@ -453,13 +500,13 @@ function renderTable() {
         ${depthCell}${freqCell}
         <td>${fmt(Tshow, 3)}</td>
         <td>${fmt(Lshow, 3)}</td>
-        <td${cls}>${fmt(r.Hi1)} ${m1}</td>
-        <td${cls}>${fmt(r.Hr1)}</td>
-        <td${cls}>${fmt(r.Kr1, 3)}</td>
-        <td${cls}>${fmt(r.Hi2)} ${m2}</td>
-        <td${cls}>${fmt(r.Hr2)}</td>
-        <td${cls}>${fmt(r.Kr2, 3)}</td>
-        <td>${fmt(r.Kt, 3)}</td>
+        <td${mk(warnCls)}>${fmt(r.Hi1)} ${m1}</td>
+        <td${mk(warnCls)}>${fmt(r.Hr1)}</td>
+        <td${mk(warnCls)}>${fmt(r.Kr1, 3)}</td>
+        <td${mk(warnCls, "col-arr2")}>${fmt(r.Hi2)} ${m2}</td>
+        <td${mk(warnCls, "col-arr2")}>${fmt(r.Hr2)}</td>
+        <td${mk(warnCls, "col-arr2")}>${fmt(r.Kr2, 3)}</td>
+        <td${mk("col-arr2")}>${fmt(r.Kt, 3)}</td>
         <td><button class="row-del" data-del="${rec.id}">&times;</button></td>`;
     }
     body.appendChild(tr);

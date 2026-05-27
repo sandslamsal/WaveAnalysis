@@ -141,8 +141,8 @@
         <div class="field">
           <label for="periodDisplay">Period &amp; wavelength</label>
           <select id="periodDisplay">
-            <option value="Tp" selected>T<sub>p</sub> (spectral peak)</option>
-            <option value="Tm">T<sub>m</sub> (zero-crossing mean)</option>
+            <option value="Tm" selected>T<sub>m</sub> (zero-crossing mean)</option>
+            <option value="Tp">T<sub>p</sub> (spectral peak)</option>
           </select>
           <details class="field-help">
             <summary>What does this do?</summary>
@@ -340,16 +340,16 @@
             <tr>
               <th>File</th>
               <th><i>d</i> (m)</th>
-              <th id="th-f"><i>f</i><sub>p</sub> (Hz)</th>
-              <th id="th-T"><i>T</i><sub>p</sub> (s)</th>
-              <th id="th-L"><i>L</i><sub>p</sub> (m)</th>
+              <th id="th-f"><i>f</i><sub>m</sub> (Hz)</th>
+              <th id="th-T"><i>T</i><sub>m</sub> (s)</th>
+              <th id="th-L"><i>L</i><sub>m</sub> (m)</th>
               <th>H<sub>i1</sub> (m)</th>
               <th>H<sub>r1</sub> (m)</th>
               <th>K<sub>r1</sub></th>
-              <th>H<sub>i2</sub> (m)</th>
-              <th>H<sub>r2</sub> (m)</th>
-              <th>K<sub>r2</sub></th>
-              <th>K<sub>t</sub></th>
+              <th class="col-arr2">H<sub>i2</sub> (m)</th>
+              <th class="col-arr2">H<sub>r2</sub> (m)</th>
+              <th class="col-arr2">K<sub>r2</sub></th>
+              <th class="col-arr2">K<sub>t</sub></th>
               <th></th>
             </tr>
           </thead>
@@ -391,11 +391,9 @@
         Method: Goda &amp; Suzuki (1976); Kobayashi, Cox &amp; Wurjanto (1990).
         Released under the MIT License.
       </p>
-      <p class="footer-fine">
-        Runs entirely in your browser &mdash; no data is uploaded.
-      </p>
-      <p class="footer-fine">
-        Last update: <span id="lastUpdate">&mdash;</span>
+      <p class="footer-fine footer-fine-row">
+        <span>Runs entirely in your browser &mdash; no data is uploaded.</span>
+        <span>Last update: <span id="lastUpdate">&mdash;</span></span>
       </p>
     </div>
   </footer>

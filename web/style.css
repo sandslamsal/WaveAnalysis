@@ -387,6 +387,12 @@ td.fallback { color: var(--warn); }
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
+.footer-fine-row {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 
 /* Wave-type toggle styles removed in v0.3.0 along with the toggle itself. */
 
